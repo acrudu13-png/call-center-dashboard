@@ -1,103 +1,185 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { summaryMetrics, dailyScores, flaggedCalls } from "@/lib/mockData";
+import { Phone, TrendingUp, AlertTriangle, Clock } from "lucide-react";
+import Link from "next/link";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+
+const metricCards = [
+  {
+    title: "Total Calls Analyzed",
+    value: summaryMetrics.totalCalls,
+    icon: Phone,
+    description: "Last 30 days",
+  },
+  {
+    title: "Average Quality Score",
+    value: `${summaryMetrics.avgScore}%`,
+    icon: TrendingUp,
+    description: "Across all agents",
+  },
+  {
+    title: "Critical Failures",
+    value: summaryMetrics.criticalFailures,
+    icon: AlertTriangle,
+    description: "Compliance violations",
+  },
+  {
+    title: "Pending Review",
+    value: summaryMetrics.callsInReview,
+    icon: Clock,
+    description: "Awaiting supervisor action",
+  },
+];
+
+export default function DashboardPage() {
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground">
+          Call center quality overview for the last 30 days.
+        </p>
+      </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      {/* Metric Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {metricCards.map((m) => (
+          <Card key={m.title}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">{m.title}</CardTitle>
+              <m.icon className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{m.value}</div>
+              <p className="text-xs text-muted-foreground">{m.description}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Trend Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Quality Score Trend</CardTitle>
+          <CardDescription>
+            Average QA score over the last 30 days
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={dailyScores}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(v) => v.slice(5)}
+                />
+                <YAxis domain={[60, 100]} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Line
+                  type="monotone"
+                  dataKey="avgScore"
+                  stroke="#2563eb"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Avg Score"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Flagged Calls Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Flagged for Review</CardTitle>
+          <CardDescription>
+            Calls with critical compliance failures requiring supervisor review
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Call ID</TableHead>
+                <TableHead>Date/Time</TableHead>
+                <TableHead>Agent</TableHead>
+                <TableHead>Score</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Failed Rules</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {flaggedCalls.slice(0, 10).map((call) => (
+                <TableRow key={call.id}>
+                  <TableCell>
+                    <Link
+                      href={`/calls/${call.id}`}
+                      className="text-primary hover:underline font-medium"
+                    >
+                      {call.id}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(call.dateTime).toLocaleString()}
+                  </TableCell>
+                  <TableCell>{call.agentName}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={call.qaScore >= 80 ? "default" : "destructive"}
+                    >
+                      {call.qaScore}%
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        call.status === "flagged"
+                          ? "destructive"
+                          : call.status === "in_review"
+                          ? "secondary"
+                          : "default"
+                      }
+                    >
+                      {call.status.replace("_", " ")}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {call.rulesFailed.length} rule(s) failed
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
