@@ -1,7 +1,5 @@
-"use server";
-
 // ============================================================
-// Server Actions — stubbed for demo (mocking DB save)
+// Mock Actions — stubbed for demo (client-side mocks)
 // ============================================================
 
 export async function saveSftpSettings(data: {
