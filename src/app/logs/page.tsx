@@ -325,6 +325,8 @@ export default function LogsPage() {
                     <TableHead>Job ID</TableHead>
                     <TableHead>File</TableHead>
                     <TableHead>Uploaded</TableHead>
+                    <TableHead>Started</TableHead>
+                    <TableHead>Completed</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -345,8 +347,14 @@ export default function LogsPage() {
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {getRelativeTime(job.uploadedAt)}
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {formatTime(job.uploadedAt)}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {job.startedAt ? formatTime(job.startedAt) : "-"}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {job.completedAt ? formatTime(job.completedAt) : "-"}
                         </TableCell>
                         <TableCell>
                           <Badge variant={config.variant} className="gap-1">
