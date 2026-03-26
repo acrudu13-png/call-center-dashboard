@@ -11,20 +11,16 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import {
   ArrowLeft,
   Play,
   Pause,
-  SkipBack,
-  SkipForward,
   Volume2,
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  Star,
   User,
   Headphones,
 } from "lucide-react";
@@ -62,14 +58,14 @@ export default function CallDetailClient({
     minor: 1,
   };
 
-  const totalWeight = call.scorecardSections.reduce(
+  const totalWeight = call.aiScorecard.sections.reduce(
     (sum, s) => sum + weightMap[s.weight],
     0
   );
-  const passedWeight = call.scorecardSections
+  const passedWeight = call.aiScorecard.sections
     .filter((s) => s.passed)
     .reduce((sum, s) => sum + weightMap[s.weight], 0);
-  const calculatedScore = Math.round((passedWeight / totalWeight) * 100);
+  const calculatedScore = call.aiScorecard.overallScore;
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
@@ -113,7 +109,7 @@ export default function CallDetailClient({
                 Call Recording
               </CardTitle>
               <CardDescription>
-                {call.date} at {call.time} • {call.duration}
+                {call.dateTime} • {Math.floor(call.duration / 60)}:{String(call.duration % 60).padStart(2, "0")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -150,13 +146,13 @@ export default function CallDetailClient({
                   <Slider
                     value={[currentTime]}
                     onValueChange={([v]) => setCurrentTime(v)}
-                    max={call.durationSeconds}
+                    max={call.duration}
                     step={1}
                     className="w-full"
                   />
                 </div>
                 <span className="text-sm text-muted-foreground w-24 text-right">
-                  {formatTime(currentTime)} / {formatTime(call.durationSeconds)}
+                  {formatTime(currentTime)} / {formatTime(call.duration)}
                 </span>
               </div>
 
@@ -232,7 +228,7 @@ export default function CallDetailClient({
             <CardContent>
               <Progress value={calculatedScore} className="h-3 mb-4" />
               <div className="space-y-3">
-                {call.scorecardSections.map((section) => (
+                {call.aiScorecard.sections.map((section) => (
                   <div
                     key={section.ruleId}
                     className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50"
@@ -266,19 +262,15 @@ export default function CallDetailClient({
             <CardContent className="space-y-4">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Agent</span>
-                <span className="font-medium">{call.agent}</span>
+                <span className="font-medium">{call.agentName}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Customer</span>
-                <span className="font-medium">{call.customer}</span>
+                <span className="font-medium">N/A</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Phone</span>
-                <span className="font-medium">{call.phone}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Campaign</span>
-                <span className="font-medium">{call.campaign}</span>
+                <span className="font-medium">{call.customerPhone}</span>
               </div>
             </CardContent>
           </Card>
@@ -293,7 +285,7 @@ export default function CallDetailClient({
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2">
-                  {call.failedRules.map((rule, idx) => (
+                  {call.rulesFailed.map((rule, idx) => (
                     <li key={idx} className="text-sm flex items-center gap-2">
                       <XCircle className="h-4 w-4 text-destructive" />
                       {rule}
