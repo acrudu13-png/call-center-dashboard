@@ -128,7 +128,7 @@ export default function CallsExplorerPage() {
                 <SlidersHorizontal className="h-4 w-4 mr-2" />
                 Filters
               </Button>
-              {(minScore || maxScore || statusFilter !== "all" || ruleFilter !== "all") && (
+              {hasActiveFilters && (
                 <Button variant="ghost" size="sm" onClick={clearFilters}>
                   <X className="h-4 w-4 mr-1" /> Clear
                 </Button>
@@ -136,7 +136,41 @@ export default function CallsExplorerPage() {
             </div>
 
             {showFilters && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2 border-t">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" /> From Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" /> To Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>QA Status</Label>
+                  <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="Passed">Passed</SelectItem>
+                      <SelectItem value="Average">Average</SelectItem>
+                      <SelectItem value="Failed">Failed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-1.5">
                   <Label>Min Score</Label>
                   <Input
@@ -154,21 +188,6 @@ export default function CallsExplorerPage() {
                     value={maxScore}
                     onChange={(e) => setMaxScore(e.target.value)}
                   />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Status</Label>
-                  <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="in_review">In Review</SelectItem>
-                      <SelectItem value="flagged">Flagged</SelectItem>
-                      <SelectItem value="processing">Processing</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Failed Rule</Label>
@@ -248,19 +267,22 @@ export default function CallsExplorerPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        call.status === "flagged"
-                          ? "destructive"
-                          : call.status === "in_review"
-                          ? "secondary"
-                          : call.status === "processing"
-                          ? "outline"
-                          : "default"
-                      }
-                    >
-                      {call.status.replace("_", " ")}
-                    </Badge>
+                    {(() => {
+                      const s = getQAStatus(call.qaScore);
+                      return (
+                        <Badge
+                          variant={
+                            s === "Passed"
+                              ? "default"
+                              : s === "Average"
+                              ? "secondary"
+                              : "destructive"
+                          }
+                        >
+                          {s}
+                        </Badge>
+                      );
+                    })()}
                   </TableCell>
                 </TableRow>
               ))}

@@ -4,6 +4,9 @@ import { useState } from "react";
 import {
   Card,
   CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +45,6 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const DEFAULT_MAIN_PROMPT = `You are a QA analyst evaluating a customer service call transcript. Your task is to assess the call against the quality criteria below and return a structured JSON scorecard.
 
