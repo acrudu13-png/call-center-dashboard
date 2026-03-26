@@ -58,13 +58,6 @@ export default function CallDetailClient({
     minor: 1,
   };
 
-  const totalWeight = call.aiScorecard.sections.reduce(
-    (sum, s) => sum + weightMap[s.weight],
-    0
-  );
-  const passedWeight = call.aiScorecard.sections
-    .filter((s) => s.passed)
-    .reduce((sum, s) => sum + weightMap[s.weight], 0);
   const calculatedScore = call.aiScorecard.overallScore;
 
   const getStatusBadge = (status: string) => {
@@ -145,7 +138,7 @@ export default function CallDetailClient({
                 <div className="flex-1">
                   <Slider
                     value={[currentTime]}
-                    onValueChange={([v]) => setCurrentTime(v)}
+                    onValueChange={(v) => setCurrentTime(v[0])}
                     max={call.duration}
                     step={1}
                     className="w-full"
