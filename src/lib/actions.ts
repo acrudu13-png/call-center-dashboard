@@ -118,3 +118,15 @@ export async function reorderQARules(orderedIds: string[]) {
   console.log("[Action] QA Rules reordered:", orderedIds);
   return { success: true, message: "Rules reordered successfully." };
 }
+
+export async function saveMainPrompt(prompt: string) {
+  await new Promise((r) => setTimeout(r, 600));
+  console.log("[Action] Main prompt saved:", prompt.slice(0, 80));
+  return { success: true, message: "Main prompt saved successfully." };
+}
+
+export async function saveCallContext(context: string) {
+  await new Promise((r) => setTimeout(r, 500));
+  console.log("[Action] Call context saved:", context.slice(0, 80));
+  return { success: true, message: "Call context saved successfully." };
+}

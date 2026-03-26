@@ -27,7 +27,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { qaRules, type QARule } from "@/lib/mockData";
-import { saveQARule, deleteQARule } from "@/lib/actions";
+import { saveQARule, deleteQARule, saveMainPrompt } from "@/lib/actions";
 import {
   Plus,
   GripVertical,
@@ -38,13 +38,33 @@ import {
   Star,
   ArrowUp,
   ArrowDown,
+  Loader2,
+  MessageSquare,
 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+const DEFAULT_MAIN_PROMPT = `You are a QA analyst evaluating a customer service call transcript. Your task is to assess the call against the quality criteria below and return a structured JSON scorecard.
+
+Be objective, fair, and consistent. Base your assessment only on what is explicitly stated in the transcript. For each rule, provide a clear determination and a brief explanation.`;
 
 export default function RulesEnginePage() {
   const [rules, setRules] = useState<QARule[]>(qaRules);
   const [editingRule, setEditingRule] = useState<QARule | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const [mainPrompt, setMainPrompt] = useState(DEFAULT_MAIN_PROMPT);
+  const [promptSaving, setPromptSaving] = useState(false);
+  const [promptStatus, setPromptStatus] = useState<string | null>(null);
+
+  const handlePromptSave = async () => {
+    setPromptSaving(true);
+    const result = await saveMainPrompt(mainPrompt);
+    setPromptStatus(result.message);
+    setTimeout(() => setPromptStatus(null), 3000);
+    setPromptSaving(false);
+  };
 
   const emptyRule: QARule = {
     id: "",
@@ -250,6 +270,47 @@ export default function RulesEnginePage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Main Prompt */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5" />
+            <div>
+              <CardTitle>Main Prompt</CardTitle>
+              <CardDescription>
+                This is the system instruction sent to the LLM. The rules below are automatically appended as evaluation criteria.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <Textarea
+              rows={6}
+              value={mainPrompt}
+              onChange={(e) => setMainPrompt(e.target.value)}
+              placeholder="Enter the main LLM instruction..."
+              className="font-mono text-sm"
+            />
+            <div className="flex items-center gap-3">
+              <Button onClick={handlePromptSave} disabled={promptSaving}>
+                {promptSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save Prompt
+              </Button>
+              {promptStatus && (
+                <span className="text-sm text-green-600 flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" /> {promptStatus}
+                </span>
+              )}
+            </div>
+            <Separator />
+            <p className="text-xs text-muted-foreground">
+              After this prompt, each enabled rule below will be appended as a numbered evaluation criterion in the format: <span className="font-mono bg-muted px-1 rounded">Rule N: [Title] — [Description]</span>
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Rules List */}
       <div className="space-y-3">

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -30,11 +31,13 @@ import {
   saveLlmSettings,
   saveSonioxSettings,
   saveCustomVocabulary,
+  saveCallContext,
 } from "@/lib/actions";
 import {
   Brain,
   Mic,
   BookOpen,
+  FileText,
   CheckCircle2,
   Loader2,
   Eye,
@@ -55,6 +58,9 @@ export default function AISettingsPage() {
   const [vocab, setVocab] = useState<string[]>(defaultCustomVocabulary);
   const [vocabInput, setVocabInput] = useState("");
   const [vocabSaving, setVocabSaving] = useState(false);
+
+  const [callContext, setCallContext] = useState("");
+  const [contextSaving, setContextSaving] = useState(false);
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -82,6 +88,13 @@ export default function AISettingsPage() {
     const result = await saveCustomVocabulary(vocab);
     showStatus(result.message);
     setVocabSaving(false);
+  };
+
+  const handleContextSave = async () => {
+    setContextSaving(true);
+    const result = await saveCallContext(callContext);
+    showStatus(result.message);
+    setContextSaving(false);
   };
 
   const addVocabWord = () => {
@@ -350,6 +363,43 @@ export default function AISettingsPage() {
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
               Save Vocabulary
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      {/* Call Context */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            <div>
+              <CardTitle>Context</CardTitle>
+              <CardDescription>
+                Provide free-text context about the nature of these calls — e.g., product lines, common issues, business rules, or agent workflows. This context is injected into every analysis prompt.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4 max-w-xl">
+            <Textarea
+              rows={8}
+              value={callContext}
+              onChange={(e) => setCallContext(e.target.value)}
+              placeholder={`Example:\nThis is a Romanian telecom customer support center. Agents handle billing disputes, plan changes, roaming activations, and technical support. All calls are conducted in Romanian. Agents must follow GDPR data processing consent procedures before accessing any account data.`}
+              className="text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              This text will be included in the LLM analysis prompt to improve accuracy and relevance of QA assessments.
+            </p>
+
+            <Separator />
+
+            <Button onClick={handleContextSave} disabled={contextSaving}>
+              {contextSaving && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              Save Context
             </Button>
           </div>
         </CardContent>

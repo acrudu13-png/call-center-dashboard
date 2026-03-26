@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import { calls, qaRules } from "@/lib/mockData";
 import Link from "next/link";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Search, SlidersHorizontal, X, Calendar } from "lucide-react";
 
 function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -42,7 +42,15 @@ export default function CallsExplorerPage() {
   const [maxScore, setMaxScore] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [ruleFilter, setRuleFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+
+  function getQAStatus(score: number): "Passed" | "Average" | "Failed" {
+    if (score >= 85) return "Passed";
+    if (score >= 70) return "Average";
+    return "Failed";
+  }
 
   const filtered = useMemo(() => {
     return calls.filter((call) => {
@@ -56,13 +64,26 @@ export default function CallsExplorerPage() {
 
       if (minScore && call.qaScore < Number(minScore)) return false;
       if (maxScore && call.qaScore > Number(maxScore)) return false;
-      if (statusFilter !== "all" && call.status !== statusFilter) return false;
+
+      if (statusFilter !== "all" && getQAStatus(call.qaScore) !== statusFilter)
+        return false;
+
       if (ruleFilter !== "all" && !call.rulesFailed.includes(ruleFilter))
         return false;
 
+      if (dateFrom) {
+        const from = new Date(dateFrom);
+        if (new Date(call.dateTime) < from) return false;
+      }
+      if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        if (new Date(call.dateTime) > to) return false;
+      }
+
       return true;
     });
-  }, [search, minScore, maxScore, statusFilter, ruleFilter]);
+  }, [search, minScore, maxScore, statusFilter, ruleFilter, dateFrom, dateTo]);
 
   const clearFilters = () => {
     setSearch("");
@@ -70,7 +91,12 @@ export default function CallsExplorerPage() {
     setMaxScore("");
     setStatusFilter("all");
     setRuleFilter("all");
+    setDateFrom("");
+    setDateTo("");
   };
+
+  const hasActiveFilters =
+    minScore || maxScore || statusFilter !== "all" || ruleFilter !== "all" || dateFrom || dateTo;
 
   return (
     <div className="space-y-6">

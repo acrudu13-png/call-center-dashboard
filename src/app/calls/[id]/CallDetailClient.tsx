@@ -138,7 +138,7 @@ export default function CallDetailClient({
                 <div className="flex-1">
                   <Slider
                     value={[currentTime]}
-                    onValueChange={(v) => setCurrentTime(v[0])}
+                    onValueChange={(v: number[]) => setCurrentTime(v[0])}
                     max={call.duration}
                     step={1}
                     className="w-full"
