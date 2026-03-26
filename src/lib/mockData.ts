@@ -26,6 +26,7 @@ export interface TranscriptLine {
 
 export interface AIScorecard {
   overallScore: number;
+  summary: string;
   sections: ScorecardSection[];
   issuesDetected: string[];
   coachingNotes: string[];
@@ -340,6 +341,9 @@ function generateCalls(): Call[] {
       transcript: generateTranscript(),
       aiScorecard: {
         overallScore: score,
+        summary: failedRules.length > 0
+          ? "Compliance issues detected. Agent needs refresher on GDPR consent and opening procedures. Review call script adherence."
+          : "Professional call handling with good empathy and problem resolution. Agent followed all compliance requirements.",
         sections: scorecardSections,
         extractions,
         issuesDetected: failedRules.length > 0

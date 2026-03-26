@@ -32,6 +32,7 @@ import {
   Headphones,
   Tag,
   History,
+  Brain,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -197,6 +198,36 @@ export default function CallDetailClient({
                 <Volume2 className="h-4 w-4 text-muted-foreground" />
                 <Slider defaultValue={[75]} max={100} step={1} className="w-24" />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* AI Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5" />
+                AI Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {call.aiScorecard.summary}
+              </p>
+              {call.aiScorecard.coachingNotes.length > 0 && (
+                <div className="mt-3 pt-3 border-t">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                    Coaching Notes
+                  </p>
+                  <ul className="text-sm space-y-1">
+                    {call.aiScorecard.coachingNotes.slice(0, 2).map((note, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-primary mt-1">•</span>
+                        <span className="text-muted-foreground">{note}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </CardContent>
           </Card>
 
