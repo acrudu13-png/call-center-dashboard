@@ -19,7 +19,7 @@ export interface Call {
 }
 
 export interface TranscriptLine {
-  speaker: "agent" | "customer";
+  speaker: string; // arbitrary speaker ID from diarization (e.g. "speaker_0", "speaker_1")
   timestamp: number; // seconds from start
   text: string;
 }
@@ -29,6 +29,7 @@ export interface AIScorecard {
   sections: ScorecardSection[];
   issuesDetected: string[];
   coachingNotes: string[];
+  extractions: Record<string, string>; // extractionKey → value or "N/A"
 }
 
 export interface ScorecardSection {
@@ -37,6 +38,7 @@ export interface ScorecardSection {
   passed: boolean;
   weight: "critical" | "moderate" | "bonus";
   details: string;
+  extractedValue?: string; // populated for extraction-type rules
 }
 
 export interface QARule {
@@ -44,7 +46,8 @@ export interface QARule {
   title: string;
   description: string;
   weight: "critical" | "moderate" | "bonus";
-  expectedOutput: "boolean" | "text";
+  expectedOutput: "boolean" | "text" | "extraction";
+  extractionKey?: string; // used when expectedOutput === "extraction"
   enabled: boolean;
   order: number;
 }
@@ -157,6 +160,39 @@ export const qaRules: QARule[] = [
     enabled: true,
     order: 10,
   },
+  {
+    id: "rule-ext-001",
+    title: "Customer Name Extraction",
+    description:
+      "Extract the customer's full name if they identify themselves or are verified during the call. Return the name as a string, or 'N/A' if not identified.",
+    weight: "moderate",
+    expectedOutput: "extraction",
+    extractionKey: "customer_name",
+    enabled: true,
+    order: 11,
+  },
+  {
+    id: "rule-ext-002",
+    title: "Customer Intent Classification",
+    description:
+      "Classify the primary reason for the call. Options: billing dispute, technical issue, plan change, roaming activation, cancellation request, general inquiry, other.",
+    weight: "moderate",
+    expectedOutput: "extraction",
+    extractionKey: "intent",
+    enabled: true,
+    order: 12,
+  },
+  {
+    id: "rule-ext-003",
+    title: "Customer Sentiment",
+    description:
+      "Classify the customer's overall emotional tone throughout the call. Options: satisfied, neutral, frustrated, angry.",
+    weight: "bonus",
+    expectedOutput: "extraction",
+    extractionKey: "sentiment",
+    enabled: true,
+    order: 13,
+  },
 ];
 
 // --- Agents ---
@@ -174,32 +210,64 @@ const agents = [
 // --- Sample Transcript ---
 function generateTranscript(): TranscriptLine[] {
   return [
-    { speaker: "agent", timestamp: 0, text: "Bună ziua, ați sunat la Telecom România, mă numesc Maria Popescu. Cu ce vă pot ajuta astăzi?" },
-    { speaker: "customer", timestamp: 5, text: "Bună ziua. Am o problemă cu factura din luna aceasta. Mi s-a facturat o sumă mai mare decât de obicei." },
-    { speaker: "agent", timestamp: 14, text: "Îmi pare rău să aud asta. Vă rog să-mi spuneți numărul de contract și CNP-ul pentru a vă verifica identitatea." },
-    { speaker: "customer", timestamp: 22, text: "Sigur, numărul de contract este TC-2024-87432 și CNP-ul este 2850315..." },
-    { speaker: "agent", timestamp: 35, text: "Vă mulțumesc. Vă informez că acest apel este înregistrat în scopul îmbunătățirii serviciilor. Sunteți de acord cu continuarea?" },
-    { speaker: "customer", timestamp: 43, text: "Da, sunt de acord." },
-    { speaker: "agent", timestamp: 46, text: "Mulțumesc. Am verificat contul dumneavoastră. Văd că factura din martie este cu 45 de lei mai mare față de luna precedentă. Acest lucru se datorează unui serviciu adițional de roaming care a fost activat pe 15 februarie." },
-    { speaker: "customer", timestamp: 62, text: "Dar eu nu am activat niciun serviciu de roaming! Nu am fost în afara țării." },
-    { speaker: "agent", timestamp: 68, text: "Înțeleg frustrarea dumneavoastră și vă cer scuze pentru neplăcere. Permiteți-mi să verific istoricul activărilor pe contul dumneavoastră." },
-    { speaker: "customer", timestamp: 78, text: "Vă rog, da." },
-    { speaker: "agent", timestamp: 80, text: "Am verificat și se pare că serviciul a fost activat printr-un SMS promoțional. Voi dezactiva imediat acest serviciu și voi iniția o cerere de creditare pentru suma de 45 de lei." },
-    { speaker: "customer", timestamp: 95, text: "Mulțumesc, asta e tot ce voiam." },
-    { speaker: "agent", timestamp: 98, text: "De asemenea, aș dori să vă informez că avem o ofertă specială pentru pachetul Premium care include roaming în UE fără costuri suplimentare, la doar 10 lei pe lună în plus față de abonamentul actual." },
-    { speaker: "customer", timestamp: 112, text: "Nu, mulțumesc, nu sunt interesată momentan." },
-    { speaker: "agent", timestamp: 116, text: "Nicio problemă. Deci, pentru a rezuma: am dezactivat serviciul de roaming și am înregistrat cererea de creditare cu numărul REF-2024-9981. Creditul va apărea pe factura următoare în 5-7 zile lucrătoare." },
-    { speaker: "customer", timestamp: 132, text: "Perfect, mulțumesc mult." },
-    { speaker: "agent", timestamp: 135, text: "Mai aveți vreo altă întrebare sau vă mai pot ajuta cu ceva?" },
-    { speaker: "customer", timestamp: 139, text: "Nu, asta e tot. Mulțumesc." },
-    { speaker: "agent", timestamp: 142, text: "Vă mulțumesc pentru apel și vă dorim o zi frumoasă! Referința apelului este CALL-2024-44521." },
+    { speaker: "speaker_0", timestamp: 0, text: "Bună ziua, ați sunat la Telecom România, mă numesc Maria Popescu. Cu ce vă pot ajuta astăzi?" },
+    { speaker: "speaker_1", timestamp: 5, text: "Bună ziua. Am o problemă cu factura din luna aceasta. Mi s-a facturat o sumă mai mare decât de obicei." },
+    { speaker: "speaker_0", timestamp: 14, text: "Îmi pare rău să aud asta. Vă rog să-mi spuneți numărul de contract și CNP-ul pentru a vă verifica identitatea." },
+    { speaker: "speaker_1", timestamp: 22, text: "Sigur, numărul de contract este TC-2024-87432 și CNP-ul este 2850315..." },
+    { speaker: "speaker_0", timestamp: 35, text: "Vă mulțumesc. Vă informez că acest apel este înregistrat în scopul îmbunătățirii serviciilor. Sunteți de acord cu continuarea?" },
+    { speaker: "speaker_1", timestamp: 43, text: "Da, sunt de acord." },
+    { speaker: "speaker_0", timestamp: 46, text: "Mulțumesc. Am verificat contul dumneavoastră. Văd că factura din martie este cu 45 de lei mai mare față de luna precedentă. Acest lucru se datorează unui serviciu adițional de roaming care a fost activat pe 15 februarie." },
+    { speaker: "speaker_1", timestamp: 62, text: "Dar eu nu am activat niciun serviciu de roaming! Nu am fost în afara țării." },
+    { speaker: "speaker_0", timestamp: 68, text: "Înțeleg frustrarea dumneavoastră și vă cer scuze pentru neplăcere. Permiteți-mi să verific istoricul activărilor pe contul dumneavoastră." },
+    { speaker: "speaker_1", timestamp: 78, text: "Vă rog, da." },
+    { speaker: "speaker_0", timestamp: 80, text: "Am verificat și se pare că serviciul a fost activat printr-un SMS promoțional. Voi dezactiva imediat acest serviciu și voi iniția o cerere de creditare pentru suma de 45 de lei." },
+    { speaker: "speaker_1", timestamp: 95, text: "Mulțumesc, asta e tot ce voiam." },
+    { speaker: "speaker_0", timestamp: 98, text: "De asemenea, aș dori să vă informez că avem o ofertă specială pentru pachetul Premium care include roaming în UE fără costuri suplimentare, la doar 10 lei pe lună în plus față de abonamentul actual." },
+    { speaker: "speaker_1", timestamp: 112, text: "Nu, mulțumesc, nu sunt interesată momentan." },
+    { speaker: "speaker_0", timestamp: 116, text: "Nicio problemă. Deci, pentru a rezuma: am dezactivat serviciul de roaming și am înregistrat cererea de creditare cu numărul REF-2024-9981. Creditul va apărea pe factura următoare în 5-7 zile lucrătoare." },
+    { speaker: "speaker_1", timestamp: 132, text: "Perfect, mulțumesc mult." },
+    { speaker: "speaker_0", timestamp: 135, text: "Mai aveți vreo altă întrebare sau vă mai pot ajuta cu ceva?" },
+    { speaker: "speaker_1", timestamp: 139, text: "Nu, asta e tot. Mulțumesc." },
+    { speaker: "speaker_0", timestamp: 142, text: "Vă mulțumesc pentru apel și vă dorim o zi frumoasă! Referința apelului este CALL-2024-44521." },
   ];
 }
+
+// --- Extraction mock data pools ---
+const mockCustomerNames = [
+  "Ioan Munteanu", "Gabriela Radu", "Sorin Popa", "Mihaela Stoica",
+  "Dan Ilie", "Roxana Dima", "Victor Ghiță", "Alin Borcea",
+  "Teodora Vasile", "Bogdan Ciobanu",
+];
+const mockIntents = [
+  "billing dispute", "plan change", "technical issue",
+  "roaming activation", "general inquiry", "cancellation request",
+];
+const mockSentiments = ["satisfied", "neutral", "frustrated", "angry"];
+
+// --- Repeat Caller Profiles (for caller history feature) ---
+const repeatCallerProfiles = [
+  { phone: "+40 722 111 222", name: "Ion Popescu", callIndices: [0, 8, 15, 32] },
+  { phone: "+40 733 222 333", name: "Maria Ionescu", callIndices: [1, 12, 28] },
+  { phone: "+40 744 333 444", name: "Alexandru Dumitru", callIndices: [2, 19, 35, 41] },
+  { phone: "+40 755 444 555", name: "Elena Stan", callIndices: [3, 24] },
+  { phone: "+40 766 555 666", name: "Cristian Moldovan", callIndices: [4, 16, 45] },
+  { phone: "+40 777 666 777", name: "Ana Gheorghe", callIndices: [5, 22, 38] },
+  { phone: "+40 788 777 888", name: "Mihai Nistor", callIndices: [6, 29] },
+  { phone: "+40 799 888 999", name: "Ioana Radu", callIndices: [7, 33, 47] },
+];
 
 // --- Generate Calls ---
 function generateCalls(): Call[] {
   const calls: Call[] = [];
   const statuses: Call["status"][] = ["completed", "completed", "completed", "in_review", "flagged", "completed", "completed", "processing"];
+
+  // Build a map of call index to phone number for repeat callers
+  const indexToPhone: Record<number, string> = {};
+  repeatCallerProfiles.forEach((profile) => {
+    profile.callIndices.forEach((idx) => {
+      indexToPhone[idx] = profile.phone;
+    });
+  });
 
   for (let i = 0; i < 50; i++) {
     const agent = agents[i % agents.length];
@@ -207,8 +275,33 @@ function generateCalls(): Call[] {
     const status = statuses[i % statuses.length];
     const failedRules: string[] = [];
     const scorecardSections: ScorecardSection[] = [];
+    const extractions: Record<string, string> = {};
 
     qaRules.filter((r) => r.enabled).forEach((rule) => {
+      if (rule.expectedOutput === "extraction" && rule.extractionKey) {
+        let value = "N/A";
+        if (rule.extractionKey === "customer_name") {
+          // Check if this call belongs to a repeat caller
+          const callerProfile = repeatCallerProfiles.find(p => p.callIndices.includes(i));
+          value = callerProfile
+            ? callerProfile.name
+            : (Math.random() > 0.15 ? mockCustomerNames[i % mockCustomerNames.length] : "N/A");
+        } else if (rule.extractionKey === "intent") {
+          value = mockIntents[i % mockIntents.length];
+        } else if (rule.extractionKey === "sentiment") {
+          value = mockSentiments[i % mockSentiments.length];
+        }
+        extractions[rule.extractionKey] = value;
+        scorecardSections.push({
+          ruleId: rule.id,
+          ruleTitle: rule.title,
+          passed: value !== "N/A",
+          weight: rule.weight,
+          details: value !== "N/A" ? `Extracted: ${value}` : "Could not extract — value not present in transcript.",
+          extractedValue: value,
+        });
+        return;
+      }
       const passed = Math.random() > (rule.weight === "critical" ? 0.25 : rule.weight === "moderate" ? 0.15 : 0.3);
       if (!passed) failedRules.push(rule.id);
       scorecardSections.push({
@@ -230,12 +323,15 @@ function generateCalls(): Call[] {
     const date = new Date(2024, 2, 26 - Math.floor(i / 3));
     date.setHours(8 + (i % 10), Math.floor(Math.random() * 60));
 
+    // Use repeat caller phone if available, otherwise generate random
+    const customerPhone = indexToPhone[i] || `+40 7${String(Math.floor(Math.random() * 90000000) + 10000000)}`;
+
     calls.push({
       id: `CALL-${String(1000 + i)}`,
       dateTime: date.toISOString(),
       agentName: agent.name,
       agentId: agent.id,
-      customerPhone: `+40 7${String(Math.floor(Math.random() * 90000000) + 10000000)}`,
+      customerPhone,
       duration: Math.floor(Math.random() * 600) + 120,
       qaScore: score,
       status,
@@ -245,6 +341,7 @@ function generateCalls(): Call[] {
       aiScorecard: {
         overallScore: score,
         sections: scorecardSections,
+        extractions,
         issuesDetected: failedRules.length > 0
           ? [
               ...(!compliancePass ? ["Critical compliance failure detected — immediate review required."] : []),
@@ -326,7 +423,7 @@ export const defaultSftpSettings = {
   username: "call_ingest_svc",
   password: "",
   sshKeyPath: "/etc/ssh/telecom_ingest_rsa",
-  remotePath: "/recordings/daily/",
+  remotePath: "/tlr-cs-recordings/$yesterday_date",
 };
 
 export const defaultS3Settings = {
@@ -338,15 +435,20 @@ export const defaultS3Settings = {
 };
 
 export const defaultMetadataMapping = {
-  filenamePattern: "^(?<agent_id>AGT-\\d{3})_(?<phone>\\d{10})_(?<date>\\d{8})_(?<seq>\\d+)\\.wav$",
+  filenamePattern: "_N(?<phone>\\+[\\d]+)_.*_(?<date>\\d{4}-\\d{2}-\\d{2})_(?<time>\\d{2}-\\d{2}-\\d{2})\\.",
   delimiter: "_",
   agentIdPosition: 0,
-  phonePosition: 1,
+  phonePosition: 2,
   sampleFilenames: [
-    "AGT-001_0745123456_20240315_001.wav",
-    "AGT-003_0722987654_20240315_002.wav",
-    "AGT-005_0731456789_20240315_003.wav",
+    "Telerenta_1777723443827-43242343_N+40758423232_N210-R207_2026-03-25_11-57-14.au",
+    "Telerenta_1888834554938-54353454_N+40722987654_N310-R108_2026-03-25_12-23-45.au",
+    "Telerenta_1999945665049-65464565_N+40731456789_N110-R305_2026-03-25_14-08-30.au",
   ],
+};
+
+export const defaultIngestSchedule = {
+  cronHour: 6,   // 06:00 daily
+  enabled: true,
 };
 
 export const defaultLlmSettings = {

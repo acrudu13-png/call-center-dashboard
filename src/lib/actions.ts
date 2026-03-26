@@ -128,3 +128,25 @@ export async function saveCallContext(context: string) {
   console.log("[Action] Call context saved:", context.slice(0, 80));
   return { success: true, message: "Call context saved successfully." };
 }
+
+export async function saveIngestSchedule(data: {
+  cronHour: number;
+  enabled: boolean;
+}) {
+  await new Promise((r) => setTimeout(r, 500));
+  console.log("[Action] Ingest schedule saved:", data);
+  return { success: true, message: `Schedule saved — will run daily at ${String(data.cronHour).padStart(2, "0")}:00.` };
+}
+
+export async function triggerManualIngestionCheck(remotePath: string) {
+  await new Promise((r) => setTimeout(r, 2000));
+  const resolved = remotePath.replace(
+    "$yesterday_date",
+    new Date(Date.now() - 86400000).toISOString().split("T")[0]
+  );
+  console.log("[Action] Manual ingestion check triggered for:", resolved);
+  return {
+    success: true,
+    message: `Checked ${resolved} — found 12 new files, 0 already processed. Queued for ingestion.`,
+  };
+}

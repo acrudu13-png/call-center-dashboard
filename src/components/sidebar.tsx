@@ -10,9 +10,11 @@ import {
   Database,
   Brain,
   Webhook,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   Headphones,
+  Activity,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -27,9 +29,11 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/calls", label: "Calls Explorer", icon: Phone },
   { href: "/rules", label: "QA Rules Engine", icon: ClipboardCheck },
+  { href: "/logs", label: "Logs & Monitoring", icon: Activity },
   { href: "/settings/ingestion", label: "Data Ingestion", icon: Database },
   { href: "/settings/ai", label: "AI & Transcription", icon: Brain },
   { href: "/settings/webhooks", label: "Export & Webhooks", icon: Webhook },
+  { href: "/docs", label: "Documentation", icon: BookOpen },
 ];
 
 export function Sidebar() {

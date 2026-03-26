@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -28,13 +28,16 @@ import {
 } from "@/components/ui/select";
 import { calls, qaRules } from "@/lib/mockData";
 import Link from "next/link";
-import { Search, SlidersHorizontal, X, Calendar } from "lucide-react";
+import { Search, SlidersHorizontal, X, Calendar, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
+
+type SortKey = "dateTime" | "agentName" | "duration" | "qaScore";
+type SortDir = "asc" | "desc";
 
 export default function CallsExplorerPage() {
   const [search, setSearch] = useState("");
@@ -46,14 +49,56 @@ export default function CallsExplorerPage() {
   const [dateTo, setDateTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Sorting state
+  const [sortKey, setSortKey] = useState<SortKey>("dateTime");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
   function getQAStatus(score: number): "Passed" | "Average" | "Failed" {
     if (score >= 85) return "Passed";
     if (score >= 70) return "Average";
     return "Failed";
   }
 
-  const filtered = useMemo(() => {
-    return calls.filter((call) => {
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  };
+
+  const SortableHeader = ({ 
+    column, 
+    label 
+  }: { 
+    column: SortKey; 
+    label: string; 
+  }) => (
+    <button
+      className="flex items-center gap-1 hover:text-foreground transition-colors"
+      onClick={() => toggleSort(column)}
+    >
+      {label}
+      {sortKey === column ? (
+        sortDir === "asc" ? (
+          <ArrowUp className="h-3 w-3" />
+        ) : (
+          <ArrowDown className="h-3 w-3" />
+        )
+      ) : (
+        <ArrowUpDown className="h-3 w-3 opacity-50" />
+      )}
+    </button>
+  );
+
+  const filteredAndSorted = useMemo(() => {
+    // First filter
+    const filtered = calls.filter((call) => {
       if (
         search &&
         !call.agentName.toLowerCase().includes(search.toLowerCase()) &&
@@ -83,7 +128,46 @@ export default function CallsExplorerPage() {
 
       return true;
     });
-  }, [search, minScore, maxScore, statusFilter, ruleFilter, dateFrom, dateTo]);
+
+    // Then sort
+    const sorted = [...filtered].sort((a, b) => {
+      let aVal: string | number = a[sortKey];
+      let bVal: string | number = b[sortKey];
+
+      if (sortKey === "dateTime") {
+        aVal = new Date(aVal as string).getTime();
+        bVal = new Date(bVal as string).getTime();
+      }
+
+      if (typeof aVal === "string") {
+        const cmp = (aVal as string).localeCompare(bVal as string);
+        return sortDir === "asc" ? cmp : -cmp;
+      }
+
+      return sortDir === "asc"
+        ? (aVal as number) - (bVal as number)
+        : (bVal as number) - (aVal as number);
+    });
+
+    return sorted;
+  }, [search, minScore, maxScore, statusFilter, ruleFilter, dateFrom, dateTo, sortKey, sortDir]);
+
+  // Paginated data
+  const paginatedData = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return {
+      data: filteredAndSorted.slice(start, start + pageSize),
+      total: filteredAndSorted.length,
+      totalPages: Math.ceil(filteredAndSorted.length / pageSize),
+      startItem: start + 1,
+      endItem: Math.min(start + pageSize, filteredAndSorted.length),
+    };
+  }, [filteredAndSorted, page, pageSize]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, minScore, maxScore, statusFilter, ruleFilter, dateFrom, dateTo, sortKey, sortDir]);
 
   const clearFilters = () => {
     setSearch("");
@@ -217,7 +301,7 @@ export default function CallsExplorerPage() {
           <CardTitle>
             Results{" "}
             <span className="text-muted-foreground font-normal text-sm">
-              ({filtered.length} calls)
+              ({filteredAndSorted.length} calls)
             </span>
           </CardTitle>
         </CardHeader>
@@ -226,16 +310,24 @@ export default function CallsExplorerPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Call ID</TableHead>
-                <TableHead>Date/Time</TableHead>
-                <TableHead>Agent</TableHead>
+                <TableHead>
+                  <SortableHeader column="dateTime" label="Date/Time" />
+                </TableHead>
+                <TableHead>
+                  <SortableHeader column="agentName" label="Agent" />
+                </TableHead>
                 <TableHead>Customer Phone</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>QA Score</TableHead>
+                <TableHead>
+                  <SortableHeader column="duration" label="Duration" />
+                </TableHead>
+                <TableHead>
+                  <SortableHeader column="qaScore" label="QA Score" />
+                </TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((call) => (
+              {paginatedData.data.map((call) => (
                 <TableRow key={call.id}>
                   <TableCell>
                     <Link
@@ -286,7 +378,7 @@ export default function CallsExplorerPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && (
+              {paginatedData.data.length === 0 && (
                 <TableRow>
                   <TableCell
                     colSpan={7}
@@ -298,6 +390,58 @@ export default function CallsExplorerPage() {
               )}
             </TableBody>
           </Table>
+
+          {/* Pagination Controls */}
+          {paginatedData.total > 0 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Rows per page:</span>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(v) => {
+                    setPageSize(Number(v));
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-16">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-muted-foreground">
+                  {paginatedData.startItem}-{paginatedData.endItem} of {paginatedData.total}
+                </span>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() =>
+                      setPage((p) => Math.min(paginatedData.totalPages, p + 1))
+                    }
+                    disabled={page === paginatedData.totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

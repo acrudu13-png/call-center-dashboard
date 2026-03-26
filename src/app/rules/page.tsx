@@ -43,6 +43,7 @@ import {
   ArrowDown,
   Loader2,
   MessageSquare,
+  Tag,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
@@ -145,6 +146,13 @@ export default function RulesEnginePage() {
     }
   };
 
+  const outputLabel = (rule: QARule) => {
+    if (rule.expectedOutput === "extraction")
+      return rule.extractionKey ? `→ ${rule.extractionKey}` : "extraction";
+    if (rule.expectedOutput === "boolean") return "Pass/Fail";
+    return "Text";
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -225,13 +233,14 @@ export default function RulesEnginePage() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Expected Output</Label>
+                    <Label>Output Type</Label>
                     <Select
                       value={editingRule.expectedOutput}
                       onValueChange={(v) =>
                         v && setEditingRule({
                           ...editingRule,
                           expectedOutput: v as QARule["expectedOutput"],
+                          extractionKey: v !== "extraction" ? undefined : (editingRule.extractionKey ?? ""),
                         })
                       }
                     >
@@ -239,14 +248,33 @@ export default function RulesEnginePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="boolean">
-                          Boolean (Pass/Fail)
-                        </SelectItem>
+                        <SelectItem value="boolean">Boolean (Pass/Fail)</SelectItem>
                         <SelectItem value="text">Text Response</SelectItem>
+                        <SelectItem value="extraction">Extraction (extract value)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
+                {editingRule.expectedOutput === "extraction" && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rule-extraction-key">Extraction Key</Label>
+                    <Input
+                      id="rule-extraction-key"
+                      value={editingRule.extractionKey ?? ""}
+                      onChange={(e) =>
+                        setEditingRule({
+                          ...editingRule,
+                          extractionKey: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+                        })
+                      }
+                      placeholder="e.g. customer_name, intent, sentiment"
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Snake_case identifier. The extracted value will be stored under this key and shown in the Call Information panel.
+                    </p>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={editingRule.enabled}
@@ -348,25 +376,30 @@ export default function RulesEnginePage() {
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    {weightIcon(rule.weight)}
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {rule.expectedOutput === "extraction"
+                      ? <Tag className="h-4 w-4 text-blue-500" />
+                      : weightIcon(rule.weight)}
                     <span className="font-semibold">{rule.title}</span>
+                    {rule.expectedOutput !== "extraction" && (
+                      <Badge
+                        variant={
+                          rule.weight === "critical"
+                            ? "destructive"
+                            : rule.weight === "bonus"
+                            ? "outline"
+                            : "secondary"
+                        }
+                        className="text-xs"
+                      >
+                        {rule.weight}
+                      </Badge>
+                    )}
                     <Badge
-                      variant={
-                        rule.weight === "critical"
-                          ? "destructive"
-                          : rule.weight === "bonus"
-                          ? "outline"
-                          : "secondary"
-                      }
-                      className="text-xs"
+                      variant={rule.expectedOutput === "extraction" ? "secondary" : "outline"}
+                      className="text-xs font-mono"
                     >
-                      {rule.weight}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {rule.expectedOutput === "boolean"
-                        ? "Pass/Fail"
-                        : "Text"}
+                      {outputLabel(rule)}
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">

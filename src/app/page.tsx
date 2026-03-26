@@ -159,17 +159,22 @@ export default function DashboardPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        call.status === "flagged"
-                          ? "destructive"
-                          : call.status === "in_review"
-                          ? "secondary"
-                          : "default"
-                      }
-                    >
-                      {call.status.replace("_", " ")}
-                    </Badge>
+                    {(() => {
+                      const qaStatus = call.qaScore >= 85 ? "Passed" : call.qaScore >= 70 ? "Average" : "Failed";
+                      return (
+                        <Badge
+                          variant={
+                            qaStatus === "Passed"
+                              ? "default"
+                              : qaStatus === "Average"
+                              ? "secondary"
+                              : "destructive"
+                          }
+                        >
+                          {qaStatus}
+                        </Badge>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
                     {call.rulesFailed.length} rule(s) failed
