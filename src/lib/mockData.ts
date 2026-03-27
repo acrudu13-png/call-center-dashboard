@@ -41,7 +41,6 @@ export interface ScorecardSection {
   passed: boolean;
   score: number;    // actual points earned
   maxScore: number; // maximum possible points
-  weight: "critical" | "moderate" | "bonus";
   details: string;
   extractedValue?: string; // populated for extraction-type rules
 }
@@ -50,14 +49,12 @@ export interface QARule {
   id: string;
   title: string;
   description: string;
-  weight: "critical" | "moderate" | "bonus";
-  expectedOutput: "boolean" | "text" | "extraction";
-  extractionKey?: string; // used when expectedOutput === "extraction"
+  section?: string;       // Romanian section name
+  sectionEn?: string;     // English section name
+  maxScore?: number;      // max points for scored rules (undefined for extraction rules)
+  extractionKey?: string; // snake_case key for extraction rules (undefined for scored rules)
   enabled: boolean;
   order: number;
-  section?: string;   // Romanian section name
-  sectionEn?: string; // English section name
-  maxScore?: number;  // maximum points for this rule (undefined for extraction rules)
 }
 
 export interface DailyScore {
@@ -74,8 +71,6 @@ export const qaRules: QARule[] = [
     title: "Salut & Verificare identitate",
     description:
       "Agentul trebuie să salute clientul, să se prezinte cu numele și compania (Telerenta), să verifice identitatea clientului cu cel puțin două date (CNP, număr contract sau dată naștere) și să confirme că apelul este înregistrat.",
-    weight: "critical",
-    expectedOutput: "boolean",
     enabled: true,
     order: 1,
     section: "Deschidere apel",
@@ -87,8 +82,6 @@ export const qaRules: QARule[] = [
     title: "Consimțământ GDPR",
     description:
       "Agentul trebuie să informeze clientul că apelul este înregistrat și să obțină consimțământul verbal pentru prelucrarea datelor conform GDPR România, înainte de a continua.",
-    weight: "critical",
-    expectedOutput: "boolean",
     enabled: true,
     order: 2,
     section: "Deschidere apel",
@@ -100,8 +93,6 @@ export const qaRules: QARule[] = [
     title: "Ton profesional",
     description:
       "Agentul menține un ton profesional, calm și prietenos pe toată durata deschiderii apelului. Nu folosește argou, nu întrerupe clientul și nu adoptă un ton distant sau nepoliticos.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 3,
     section: "Deschidere apel",
@@ -113,8 +104,6 @@ export const qaRules: QARule[] = [
     title: "Scopul apelului explicat",
     description:
       "Agentul explică clar scopul apelului sau confirmă motivul contactului clientului, asigurând că ambele părți înțeleg contextul conversației încă de la început.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 4,
     section: "Deschidere apel",
@@ -128,8 +117,6 @@ export const qaRules: QARule[] = [
     title: "Claritate & Coerență",
     description:
       "Agentul comunică clar și coerent, fără repetări robotice, fără halucinații sau răspunsuri irelevante. Informațiile sunt prezentate logic și fără ambiguitate.",
-    weight: "critical",
-    expectedOutput: "text",
     enabled: true,
     order: 5,
     section: "Comunicare",
@@ -141,8 +128,6 @@ export const qaRules: QARule[] = [
     title: "Acuratețea informațiilor",
     description:
       "Toate informațiile despre produse, prețuri și politici comunicate de agent sunt corecte din punct de vedere factual. Nu există informații eronate, completări inutile sau bucle repetitive.",
-    weight: "critical",
-    expectedOutput: "text",
     enabled: true,
     order: 6,
     section: "Comunicare",
@@ -154,8 +139,6 @@ export const qaRules: QARule[] = [
     title: "Adaptare la nivelul clientului",
     description:
       "Agentul adaptează limbajul și ritmul conversației la nivelul de înțelegere al clientului, folosind termeni simpli pentru clienți obișnuiți și termeni tehnici pentru cei familiarizați cu domeniul.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 7,
     section: "Comunicare",
@@ -169,8 +152,6 @@ export const qaRules: QARule[] = [
     title: "Întrebări relevante adresate",
     description:
       "Agentul pune întrebări pertinente pentru a înțelege situația clientului: motivul apelului, istoricul problemei, așteptările clientului. Întrebările sunt deschise și orientate spre soluție.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 8,
     section: "Identificare nevoie",
@@ -182,8 +163,6 @@ export const qaRules: QARule[] = [
     title: "Ascultare activă",
     description:
       "Agentul demonstrează ascultare activă: parafrazează preocupările clientului, confirmă înțelegerea și nu întrerupe. Folosește indicatori verbali de ascultare.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 9,
     section: "Identificare nevoie",
@@ -195,8 +174,6 @@ export const qaRules: QARule[] = [
     title: "Înțelegerea situației clientului",
     description:
       "Agentul demonstrează că a înțeles corect situația clientului înainte de a propune soluții. Rezumă sau confirmă problema clientului cu acuratețe.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 10,
     section: "Identificare nevoie",
@@ -210,8 +187,6 @@ export const qaRules: QARule[] = [
     title: "Explicarea clară a produsului/situației",
     description:
       "Agentul explică clar produsul sau soluția oferită, inclusiv caracteristicile relevante, fără a omite informații esențiale sau a induce în eroare clientul.",
-    weight: "critical",
-    expectedOutput: "text",
     enabled: true,
     order: 11,
     section: "Prezentare soluție",
@@ -223,8 +198,6 @@ export const qaRules: QARule[] = [
     title: "Beneficii cheie prezentate",
     description:
       "Agentul prezintă cel puțin două beneficii cheie relevante pentru situația clientului, personalizând prezentarea în funcție de nevoile identificate.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 12,
     section: "Prezentare soluție",
@@ -236,8 +209,6 @@ export const qaRules: QARule[] = [
     title: "Costuri & Obligații explicate",
     description:
       "Agentul explică transparent costurile, durata contractului și orice obligații aferente soluției propuse. Nu omite informații financiare relevante.",
-    weight: "critical",
-    expectedOutput: "boolean",
     enabled: true,
     order: 13,
     section: "Prezentare soluție",
@@ -249,8 +220,6 @@ export const qaRules: QARule[] = [
     title: "Soluție persuasivă și relevantă",
     description:
       "Soluția propusă este relevantă pentru situația clientului și prezentată convingător, fără a fi forțată. Agentul aliniază propunerea la nevoile reale identificate.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 14,
     section: "Prezentare soluție",
@@ -264,8 +233,6 @@ export const qaRules: QARule[] = [
     title: "Răspuns calm la obiecții",
     description:
       "Agentul răspunde calm și empatic la obiecțiile clientului, fără a deveni defensiv, agresiv sau a ignora preocupările exprimate.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 15,
     section: "Gestionarea obiecțiilor",
@@ -277,8 +244,6 @@ export const qaRules: QARule[] = [
     title: "Argumente relevante",
     description:
       "Agentul furnizează argumente concrete și relevante pentru a răspunde obiecțiilor, bazate pe fapte și beneficii reale, nu generice.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 16,
     section: "Gestionarea obiecțiilor",
@@ -290,8 +255,6 @@ export const qaRules: QARule[] = [
     title: "Fără conflicte / bucle",
     description:
       "Agentul nu intră în conflict cu clientul și nu se blochează în bucle repetitive. Dacă clientul rămâne hotărât, agentul acceptă respectuos și îndrumă spre pașii următori.",
-    weight: "critical",
-    expectedOutput: "boolean",
     enabled: true,
     order: 17,
     section: "Gestionarea obiecțiilor",
@@ -305,8 +268,6 @@ export const qaRules: QARule[] = [
     title: "Cerere clară de acțiune",
     description:
       "Agentul formulează o cerere de acțiune clară și specifică pentru client (ex: confirmare abonament, programare tehnician, furnizare date), fără ambiguitate.",
-    weight: "critical",
-    expectedOutput: "boolean",
     enabled: true,
     order: 18,
     section: "Call to Action",
@@ -318,8 +279,6 @@ export const qaRules: QARule[] = [
     title: "Termen concret menționat",
     description:
       "Agentul menționează un termen sau un interval de timp concret pentru acțiunea propusă sau pentru pașii următori (ex: '5-7 zile lucrătoare', 'până la sfârșitul zilei').",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 19,
     section: "Call to Action",
@@ -331,8 +290,6 @@ export const qaRules: QARule[] = [
     title: "Confirmare înțelegere client",
     description:
       "Agentul confirmă că clientul a înțeles acțiunea care urmează și este de acord cu pașii stabiliți, înainte de a încheia această secțiune.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 20,
     section: "Call to Action",
@@ -346,8 +303,6 @@ export const qaRules: QARule[] = [
     title: "Control direcție conversație",
     description:
       "Agentul menține controlul conversației, ghidând discuția spre obiectivul apelului fără a fi autoritar. Readuce conversația pe traiectoria corectă dacă clientul deviază.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 21,
     section: "Control",
@@ -359,8 +314,6 @@ export const qaRules: QARule[] = [
     title: "Fără devieri inutile",
     description:
       "Agentul nu introduce subiecte irelevante și nu permite conversației să se abată nejustificat de la scopul apelului.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 22,
     section: "Control",
@@ -374,8 +327,6 @@ export const qaRules: QARule[] = [
     title: "Rezumat pași următori",
     description:
       "Agentul rezumă clar pașii următori stabiliți, menționând numărul de referință al apelului sau al tichetului și orice acțiuni pendinte.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 23,
     section: "Închidere apel",
@@ -387,8 +338,6 @@ export const qaRules: QARule[] = [
     title: "Închidere politicoasă",
     description:
       "Agentul încheie apelul politicos, mulțumind clientului pentru apel, urând o zi bună și așteptând ca clientul să închidă primul dacă este posibil.",
-    weight: "moderate",
-    expectedOutput: "boolean",
     enabled: true,
     order: 24,
     section: "Închidere apel",
@@ -402,8 +351,6 @@ export const qaRules: QARule[] = [
     title: "Customer Name Extraction",
     description:
       "Extract the customer's full name if they identify themselves or are verified during the call. Return the name as a string, or 'N/A' if not identified.",
-    weight: "moderate",
-    expectedOutput: "extraction",
     extractionKey: "customer_name",
     enabled: true,
     order: 25,
@@ -413,8 +360,6 @@ export const qaRules: QARule[] = [
     title: "Customer Intent Classification",
     description:
       "Classify the primary reason for the call. Options: billing dispute, technical issue, plan change, roaming activation, cancellation request, general inquiry, other.",
-    weight: "moderate",
-    expectedOutput: "extraction",
     extractionKey: "intent",
     enabled: true,
     order: 26,
@@ -424,8 +369,6 @@ export const qaRules: QARule[] = [
     title: "Customer Sentiment",
     description:
       "Classify the customer's overall emotional tone throughout the call. Options: satisfied, neutral, frustrated, angry.",
-    weight: "bonus",
-    expectedOutput: "extraction",
     extractionKey: "sentiment",
     enabled: true,
     order: 27,
@@ -434,7 +377,7 @@ export const qaRules: QARule[] = [
 
 // Total max score across all scoring rules
 export const TOTAL_MAX_SCORE = qaRules
-  .filter((r) => r.expectedOutput !== "extraction" && r.maxScore !== undefined)
+  .filter((r) => r.maxScore !== undefined)
   .reduce((sum, r) => sum + (r.maxScore ?? 0), 0); // = 100
 
 // --- Agents ---
@@ -571,36 +514,27 @@ function generateCalls(): Call[] {
     const hasCriticalFailure = seededRand(i * 7 + 3) < 0.08; // ~8% of calls
 
     const scoringRules = qaRules.filter(
-      (r) => r.enabled && r.expectedOutput !== "extraction"
+      (r) => r.enabled && r.maxScore !== undefined
     );
 
     scoringRules.forEach((rule, ruleIdx) => {
       const maxScore = rule.maxScore ?? 0;
       totalPossible += maxScore;
 
-      // Pass probability: critical = 80%, moderate = 87%
-      const passProbability = rule.weight === "critical" ? 0.80 : 0.87;
+      const passProbability = 0.85;
       const rand = seededRand(i * 31 + ruleIdx * 13 + 7);
       const passed = rand < passProbability;
 
       let score = 0;
       if (passed) {
-        if (rule.expectedOutput === "text") {
-          // Text rules can have partial scores (70-100% of max)
-          const partial = seededRand(i * 17 + ruleIdx * 5 + 11);
-          score = Math.round(maxScore * (0.7 + partial * 0.3));
-        } else {
-          score = maxScore;
-        }
+        // Scored rules can earn partial credit (70-100% of max)
+        const partial = seededRand(i * 17 + ruleIdx * 5 + 11);
+        score = Math.round(maxScore * (0.7 + partial * 0.3));
       } else {
         failedRules.push(rule.id);
-        if (rule.expectedOutput === "text") {
-          // Text rules may earn partial credit even when "failed" (0-40%)
-          const partial = seededRand(i * 23 + ruleIdx * 7 + 3);
-          score = Math.round(maxScore * partial * 0.4);
-        } else {
-          score = 0;
-        }
+        // Failed rules may earn partial credit (0-40%)
+        const partial = seededRand(i * 23 + ruleIdx * 7 + 3);
+        score = Math.round(maxScore * partial * 0.4);
       }
 
       totalEarned += score;
@@ -611,15 +545,14 @@ function generateCalls(): Call[] {
         passed,
         score,
         maxScore,
-        weight: rule.weight,
         details: passed
           ? "Cerință îndeplinită cu succes."
-          : `Cerința nu a fost îndeplinită. ${rule.weight === "critical" ? "Aceasta este o eroare critică de conformitate." : "Se recomandă îmbunătățire."}`,
+          : "Cerința nu a fost îndeplinită. Se recomandă îmbunătățire.",
       });
     });
 
     // Extraction rules
-    qaRules.filter((r) => r.enabled && r.expectedOutput === "extraction" && r.extractionKey).forEach((rule) => {
+    qaRules.filter((r) => r.enabled && !!r.extractionKey).forEach((rule) => {
       let value = "N/A";
       if (rule.extractionKey === "customer_name") {
         const callerProfile = repeatCallerProfiles.find(p => p.callIndices.includes(i));
@@ -638,7 +571,6 @@ function generateCalls(): Call[] {
         passed: value !== "N/A",
         score: 0,
         maxScore: 0,
-        weight: rule.weight,
         details: value !== "N/A" ? `Extras: ${value}` : "Nu s-a putut extrage — valoarea lipsește din transcript.",
         extractedValue: value,
       });
@@ -648,10 +580,7 @@ function generateCalls(): Call[] {
       ? Math.round((totalEarned / totalPossible) * 100)
       : 0;
 
-    const compliancePass = !hasCriticalFailure && !failedRules.some((id) => {
-      const rule = qaRules.find((r) => r.id === id);
-      return rule?.weight === "critical";
-    });
+    const compliancePass = !hasCriticalFailure;
 
     const grade = calculateGrade(overallScore, hasCriticalFailure);
 

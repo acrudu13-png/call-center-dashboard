@@ -130,7 +130,7 @@ export default function CallDetailClient({
   const grade = call.aiScorecard.grade;
 
   const extractionRules = qaRules.filter(
-    (r) => r.enabled && r.expectedOutput === "extraction" && r.extractionKey
+    (r) => r.enabled && !!r.extractionKey
   );
 
   const getQAStatus = (score: number) => {

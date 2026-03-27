@@ -15,13 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -36,9 +29,7 @@ import {
   GripVertical,
   Pencil,
   Trash2,
-  AlertTriangle,
   CheckCircle2,
-  Star,
   ArrowUp,
   ArrowDown,
   Loader2,
@@ -73,11 +64,11 @@ export default function RulesEnginePage() {
     id: "",
     title: "",
     description: "",
-    weight: "moderate",
-    expectedOutput: "boolean",
+    section: "",
+    sectionEn: "",
+    maxScore: 5,
     enabled: true,
     order: rules.length + 1,
-    maxScore: 5,
   };
 
   const openNew = () => {
@@ -134,26 +125,6 @@ export default function RulesEnginePage() {
     setRules(newRules);
   };
 
-  const weightIcon = (weight: string) => {
-    switch (weight) {
-      case "critical":
-        return <AlertTriangle className="h-4 w-4 text-red-500" />;
-      case "moderate":
-        return <CheckCircle2 className="h-4 w-4 text-yellow-500" />;
-      case "bonus":
-        return <Star className="h-4 w-4 text-blue-500" />;
-      default:
-        return null;
-    }
-  };
-
-  const outputLabel = (rule: QARule) => {
-    if (rule.expectedOutput === "extraction")
-      return rule.extractionKey ? `→ ${rule.extractionKey}` : "extraction";
-    if (rule.expectedOutput === "boolean") return "Pass/Fail";
-    return "Text";
-  };
-
   // Group rules by section (extraction rules go into a separate group)
   const groupedRules = useMemo(() => {
     const groups: { section: string; sectionEn?: string; rules: QARule[] }[] = [];
@@ -178,7 +149,7 @@ export default function RulesEnginePage() {
 
   // Total max score of enabled scoring rules
   const enabledMaxScore = rules
-    .filter((r) => r.enabled && r.expectedOutput !== "extraction" && r.maxScore !== undefined)
+    .filter((r) => r.enabled && r.maxScore !== undefined)
     .reduce((sum, r) => sum + (r.maxScore ?? 0), 0);
 
   return (
@@ -274,52 +245,24 @@ export default function RulesEnginePage() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label>Importanță</Label>
-                    <Select
-                      value={editingRule.weight}
-                      onValueChange={(v) =>
-                        v && setEditingRule({
-                          ...editingRule,
-                          weight: v as QARule["weight"],
-                        })
+                <div className="flex items-center gap-2 p-3 rounded-lg border">
+                  <Switch
+                    id="rule-is-extraction"
+                    checked={editingRule.extractionKey !== undefined}
+                    onCheckedChange={(v) => {
+                      if (v) {
+                        setEditingRule({ ...editingRule, maxScore: undefined, extractionKey: "" });
+                      } else {
+                        setEditingRule({ ...editingRule, extractionKey: undefined, maxScore: 5 });
                       }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="critical">Critic</SelectItem>
-                        <SelectItem value="moderate">Moderat</SelectItem>
-                        <SelectItem value="bonus">Bonus</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Tip Output</Label>
-                    <Select
-                      value={editingRule.expectedOutput}
-                      onValueChange={(v) =>
-                        v && setEditingRule({
-                          ...editingRule,
-                          expectedOutput: v as QARule["expectedOutput"],
-                          extractionKey: v !== "extraction" ? undefined : (editingRule.extractionKey ?? ""),
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="boolean">Boolean (Pass/Fail)</SelectItem>
-                        <SelectItem value="text">Text (parțial)</SelectItem>
-                        <SelectItem value="extraction">Extracție</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    }}
+                  />
+                  <div>
+                    <Label htmlFor="rule-is-extraction">Regulă de extracție</Label>
+                    <p className="text-xs text-muted-foreground">Extrage o valoare din transcript (fără scor)</p>
                   </div>
                 </div>
-                {editingRule.expectedOutput !== "extraction" && (
+                {editingRule.extractionKey === undefined && (
                   <div className="space-y-1.5">
                     <Label htmlFor="rule-max-score">Scor Maxim</Label>
                     <Input
@@ -341,7 +284,7 @@ export default function RulesEnginePage() {
                     </p>
                   </div>
                 )}
-                {editingRule.expectedOutput === "extraction" && (
+                {editingRule.extractionKey !== undefined && (
                   <div className="space-y-1.5">
                     <Label htmlFor="rule-extraction-key">Cheie Extracție</Label>
                     <Input
@@ -490,33 +433,15 @@ export default function RulesEnginePage() {
                         {/* Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            {rule.expectedOutput === "extraction"
-                              ? <Tag className="h-4 w-4 text-blue-500" />
-                              : weightIcon(rule.weight)}
+                            {rule.extractionKey && <Tag className="h-4 w-4 text-blue-500" />}
                             <span className="font-semibold">{rule.title}</span>
-                            {rule.expectedOutput !== "extraction" && (
-                              <Badge
-                                variant={
-                                  rule.weight === "critical"
-                                    ? "destructive"
-                                    : rule.weight === "bonus"
-                                    ? "outline"
-                                    : "secondary"
-                                }
-                                className="text-xs"
-                              >
-                                {rule.weight}
-                              </Badge>
-                            )}
-                            <Badge
-                              variant={rule.expectedOutput === "extraction" ? "secondary" : "outline"}
-                              className="text-xs font-mono"
-                            >
-                              {outputLabel(rule)}
-                            </Badge>
-                            {rule.maxScore !== undefined && rule.expectedOutput !== "extraction" && (
-                              <Badge variant="outline" className="text-xs font-mono text-muted-foreground">
+                            {rule.maxScore !== undefined ? (
+                              <Badge variant="outline" className="text-xs font-mono">
                                 max {rule.maxScore} pts
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs font-mono">
+                                {rule.extractionKey ? `→ ${rule.extractionKey}` : "extract"}
                               </Badge>
                             )}
                           </div>

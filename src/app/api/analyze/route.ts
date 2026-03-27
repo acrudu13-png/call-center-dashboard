@@ -82,20 +82,16 @@ export async function POST(req: NextRequest) {
 
   // Separate scoring rules from extraction rules
   const scoringRules = rules.filter(
-    (r) => r.enabled && r.expectedOutput !== "extraction"
+    (r) => r.enabled && !r.extractionKey
   );
   const extractionRules = rules.filter(
-    (r) => r.enabled && r.expectedOutput === "extraction" && r.extractionKey
+    (r) => r.enabled && r.extractionKey
   );
 
   // Build the evaluation criteria
   const criteriaLines = scoringRules.map((rule, idx) => {
     const maxScore = rule.maxScore ?? 0;
-    if (rule.expectedOutput === "boolean") {
-      return `${idx + 1}. [ID: ${rule.id}] [boolean] [maxScore: ${maxScore}] ${rule.title} — ${rule.description}`;
-    } else {
-      return `${idx + 1}. [ID: ${rule.id}] [text] [maxScore: ${maxScore}] ${rule.title} — ${rule.description}`;
-    }
+    return `${idx + 1}. [ID: ${rule.id}] [maxScore: ${maxScore}] ${rule.title} — ${rule.description}`;
   });
 
   const extractionLines = extractionRules.map((rule, idx) => {
@@ -242,11 +238,7 @@ Rules for scoring:
     }
 
     // Clamp score to valid range
-    const score = Math.max(0, Math.min(maxScore, Math.round(llmResult.score ?? 0)));
-    // For boolean rules, score must be 0 or maxScore
-    const finalScore = rule.expectedOutput === "boolean"
-      ? (score > 0 ? maxScore : 0)
-      : score;
+    const finalScore = Math.max(0, Math.min(maxScore, Math.round(llmResult.score ?? 0)));
 
     totalEarned += finalScore;
 

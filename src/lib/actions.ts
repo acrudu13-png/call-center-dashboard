@@ -95,8 +95,10 @@ export async function saveQARule(rule: {
   id?: string;
   title: string;
   description: string;
-  weight: string;
-  expectedOutput: string;
+  section?: string;
+  sectionEn?: string;
+  maxScore?: number;
+  extractionKey?: string;
   enabled: boolean;
 }) {
   await new Promise((r) => setTimeout(r, 600));
