@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useMemo } from "react";
-import { calls, qaRules } from "@/lib/mockData";
+import { calls, qaRules, type ScorecardSection } from "@/lib/mockData";
 import {
   Card,
   CardContent,
@@ -33,6 +33,7 @@ import {
   Tag,
   History,
   Brain,
+  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -54,6 +55,21 @@ function formatDate(isoString: string) {
   });
 }
 
+function GradeBadge({ grade }: { grade: "Excellent" | "Good" | "Acceptable" | "Poor" }) {
+  const config: Record<string, { label: string; className: string }> = {
+    Excellent: { label: "Excelent", className: "bg-green-100 text-green-800 border-green-200" },
+    Good: { label: "Bun", className: "bg-blue-100 text-blue-800 border-blue-200" },
+    Acceptable: { label: "Acceptabil", className: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+    Poor: { label: "Slab", className: "bg-red-100 text-red-800 border-red-200" },
+  };
+  const { label, className } = config[grade] ?? config.Poor;
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${className}`}>
+      {label}
+    </span>
+  );
+}
+
 export default function CallDetailClient({
   params,
 }: {
@@ -72,10 +88,24 @@ export default function CallDetailClient({
       .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
   }, [call]);
 
+  // Group scorecard sections by section name (non-extraction only)
+  const sectionGroups = useMemo(() => {
+    if (!call) return new Map<string, ScorecardSection[]>();
+    const groups = new Map<string, ScorecardSection[]>();
+    call.aiScorecard.sections.forEach((sec) => {
+      if (sec.extractedValue !== undefined) return; // skip extraction
+      const rule = qaRules.find((r) => r.id === sec.ruleId);
+      const key = rule?.section ?? "Altele";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(sec);
+    });
+    return groups;
+  }, [call]);
+
   if (!call) {
     return (
       <div className="flex items-center justify-center h-96">
-        <p className="text-muted-foreground">Call not found</p>
+        <p className="text-muted-foreground">Apelul nu a fost găsit</p>
       </div>
     );
   }
@@ -97,15 +127,16 @@ export default function CallDetailClient({
   ];
 
   const calculatedScore = call.aiScorecard.overallScore;
+  const grade = call.aiScorecard.grade;
 
   const extractionRules = qaRules.filter(
     (r) => r.enabled && r.expectedOutput === "extraction" && r.extractionKey
   );
 
   const getQAStatus = (score: number) => {
-    if (score >= 85) return { label: "Passed", variant: "default" as const };
-    if (score >= 70) return { label: "Average", variant: "secondary" as const };
-    return { label: "Failed", variant: "destructive" as const };
+    if (score >= 85) return { label: "Trecut", variant: "default" as const };
+    if (score >= 70) return { label: "Mediu", variant: "secondary" as const };
+    return { label: "Nepromovat", variant: "destructive" as const };
   };
 
   const qaStatus = getQAStatus(calculatedScore);
@@ -122,6 +153,10 @@ export default function CallDetailClient({
     return "destructive" as const;
   };
 
+  const extractionSections = call.aiScorecard.sections.filter(
+    (s) => s.extractedValue !== undefined
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -131,10 +166,13 @@ export default function CallDetailClient({
           </Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">Call Details</h1>
+          <h1 className="text-2xl font-bold">Detalii Apel</h1>
           <p className="text-muted-foreground">ID: {call.id}</p>
         </div>
-        <Badge variant={qaStatus.variant}>{qaStatus.label}</Badge>
+        <div className="flex items-center gap-2">
+          <GradeBadge grade={grade} />
+          <Badge variant={qaStatus.variant}>{qaStatus.label}</Badge>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -144,7 +182,7 @@ export default function CallDetailClient({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Headphones className="h-5 w-5" />
-                Call Recording
+                Înregistrare Apel
               </CardTitle>
               <CardDescription>
                 {call.dateTime} • {Math.floor(call.duration / 60)}:{String(call.duration % 60).padStart(2, "0")}
@@ -206,7 +244,7 @@ export default function CallDetailClient({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Brain className="h-5 w-5" />
-                AI Summary
+                Rezumat AI
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -216,7 +254,7 @@ export default function CallDetailClient({
               {call.aiScorecard.coachingNotes.length > 0 && (
                 <div className="mt-3 pt-3 border-t">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                    Coaching Notes
+                    Note de Coaching
                   </p>
                   <ul className="text-sm space-y-1">
                     {call.aiScorecard.coachingNotes.slice(0, 2).map((note, idx) => (
@@ -231,6 +269,30 @@ export default function CallDetailClient({
             </CardContent>
           </Card>
 
+          {/* Improvement Advice */}
+          {call.aiScorecard.improvementAdvice.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Recomandări de Îmbunătățire
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2">
+                  {call.aiScorecard.improvementAdvice.map((advice, idx) => (
+                    <li key={idx} className="flex items-start gap-3 text-sm">
+                      <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                        {idx + 1}
+                      </span>
+                      <span className="text-muted-foreground leading-relaxed">{advice}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -244,7 +306,7 @@ export default function CallDetailClient({
                         className="text-xs px-2 py-0.5 rounded-full font-medium border"
                         style={{ background: p.avatar, borderColor: p.border, color: p.label }}
                       >
-                        Speaker {n + 1}
+                        Vorbitor {n + 1}
                       </span>
                     );
                   })}
@@ -272,7 +334,7 @@ export default function CallDetailClient({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
                             <span className="text-xs font-semibold" style={{ color: p.label }}>
-                              Speaker {n + 1}
+                              Vorbitor {n + 1}
                             </span>
                             <span className="text-xs text-muted-foreground">
                               {formatTime(entry.timestamp)}
@@ -293,17 +355,17 @@ export default function CallDetailClient({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <History className="h-5 w-5" />
-                Caller History
+                Istoric Apelant
               </CardTitle>
               <CardDescription>
                 {callerHistory.length > 0 ? (
                   <>
-                    {callerHistory.length} previous call{callerHistory.length > 1 ? "s" : ""} from{" "}
+                    {callerHistory.length} apel{callerHistory.length > 1 ? "uri" : ""} anterior{callerHistory.length > 1 ? "e" : ""} de la{" "}
                     <span className="font-mono">{call.customerPhone}</span>
                   </>
                 ) : (
                   <>
-                    No previous calls from <span className="font-mono">{call.customerPhone}</span>
+                    Niciun apel anterior de la <span className="font-mono">{call.customerPhone}</span>
                   </>
                 )}
               </CardDescription>
@@ -313,10 +375,10 @@ export default function CallDetailClient({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Phone Number</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Score</TableHead>
+                      <TableHead>Dată</TableHead>
+                      <TableHead>Telefon</TableHead>
+                      <TableHead>Durată</TableHead>
+                      <TableHead>Scor</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -333,9 +395,12 @@ export default function CallDetailClient({
                         <TableCell className="font-mono text-sm">{histCall.customerPhone}</TableCell>
                         <TableCell className="text-sm">{formatTime(histCall.duration)}</TableCell>
                         <TableCell>
-                          <Badge variant={getScoreBadgeVariant(histCall.qaScore)}>
-                            {histCall.qaScore}%
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={getScoreBadgeVariant(histCall.qaScore)}>
+                              {histCall.qaScore}%
+                            </Badge>
+                            <GradeBadge grade={histCall.aiScorecard.grade} />
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -345,7 +410,7 @@ export default function CallDetailClient({
                 <div className="text-center py-8">
                   <History className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
                   <p className="text-muted-foreground text-sm">
-                    This appears to be the first call from this number.
+                    Acesta pare a fi primul apel de la acest număr.
                   </p>
                 </div>
               )}
@@ -357,22 +422,24 @@ export default function CallDetailClient({
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>QA Scorecard</CardTitle>
+              <CardTitle>Scorecard QA</CardTitle>
               <CardDescription>
-                Score:{" "}
-                <span className={getScoreColor(calculatedScore)}>
-                  {calculatedScore}%
-                </span>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`text-2xl font-bold ${getScoreColor(calculatedScore)}`}>
+                    {calculatedScore}%
+                  </span>
+                  <GradeBadge grade={grade} />
+                </div>
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Progress value={calculatedScore} className="h-3 mb-4" />
-              
+
               {/* Analysis Info */}
               <div className="flex justify-between items-center mb-4 pb-3 border-b text-sm">
                 <div className="flex items-center gap-4">
                   <div>
-                    <span className="text-muted-foreground">Analyzed by: </span>
+                    <span className="text-muted-foreground">Analizat de: </span>
                     <span className="font-medium">{(call.rawJson as { analysis_model?: string }).analysis_model ?? "Unknown"}</span>
                   </div>
                 </div>
@@ -382,42 +449,89 @@ export default function CallDetailClient({
                     : "N/A"}
                 </div>
               </div>
-              <div className="space-y-3">
-                {call.aiScorecard.sections.map((section) => {
-                  const isExtraction = section.extractedValue !== undefined;
+
+              {/* Grouped sections */}
+              <div className="space-y-4">
+                {Array.from(sectionGroups.entries()).map(([sectionName, sections]) => {
+                  const sectionEarned = sections.reduce((sum, s) => sum + (s.score ?? 0), 0);
+                  const sectionMax = sections.reduce((sum, s) => sum + (s.maxScore ?? 0), 0);
                   return (
-                    <div
-                      key={section.ruleId}
-                      className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50"
-                    >
-                      {isExtraction ? (
-                        <Tag className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
-                      ) : section.passed ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">
-                          {section.ruleTitle}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {section.details}
-                        </div>
+                    <div key={sectionName}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {sectionName}
+                        </span>
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {sectionEarned}/{sectionMax}
+                        </span>
                       </div>
-                      <Badge variant="outline" className="text-xs shrink-0">
-                        {isExtraction ? "extract" : section.weight}
-                      </Badge>
+                      <div className="space-y-1">
+                        {sections.map((section) => (
+                          <div
+                            key={section.ruleId}
+                            className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50"
+                          >
+                            {section.passed ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium">
+                                {section.ruleTitle}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {section.details}
+                              </div>
+                            </div>
+                            <span className="text-xs font-mono font-semibold shrink-0 tabular-nums">
+                              {section.score}/{section.maxScore}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })}
+
+                {/* Extraction sections */}
+                {extractionSections.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Extracții
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {extractionSections.map((section) => (
+                        <div
+                          key={section.ruleId}
+                          className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50"
+                        >
+                          <Tag className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium">
+                              {section.ruleTitle}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {section.details}
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            extract
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Call Information</CardTitle>
+              <CardTitle>Informații Apel</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between items-center">
@@ -425,23 +539,28 @@ export default function CallDetailClient({
                 <span className="font-medium text-sm">{call.agentName}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm">Phone</span>
+                <span className="text-muted-foreground text-sm">Telefon</span>
                 <span className="font-medium text-sm font-mono">{call.customerPhone}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm">Duration</span>
+                <span className="text-muted-foreground text-sm">Durată</span>
                 <span className="font-medium text-sm">{formatTime(call.duration)}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm">QA Score</span>
-                <Badge variant={qaStatus.variant}>{calculatedScore}% — {qaStatus.label}</Badge>
+                <span className="text-muted-foreground text-sm">Scor QA</span>
+                <div className="flex items-center gap-2">
+                  <span className={`font-bold text-sm ${getScoreColor(calculatedScore)}`}>
+                    {calculatedScore}%
+                  </span>
+                  <GradeBadge grade={grade} />
+                </div>
               </div>
 
               {extractionRules.length > 0 && (
                 <>
                   <div className="border-t pt-3 mt-1">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-2">
-                      AI Extractions
+                      Extracții AI
                     </p>
                     {extractionRules.map((rule) => {
                       const value = call.aiScorecard.extractions[rule.extractionKey!] ?? "N/A";
@@ -468,7 +587,7 @@ export default function CallDetailClient({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-destructive">
                   <AlertTriangle className="h-5 w-5" />
-                  Flagged Issues
+                  Probleme Semnalate
                 </CardTitle>
               </CardHeader>
               <CardContent>
