@@ -25,10 +25,8 @@ export interface TranscriptLine {
 }
 
 export interface AIScorecard {
-  overallScore: number; // 0-100 percentage
-  grade: "Excellent" | "Good" | "Acceptable" | "Poor";
+  overallScore: number;
   summary: string;
-  improvementAdvice: string[];
   sections: ScorecardSection[];
   issuesDetected: string[];
   coachingNotes: string[];
@@ -39,8 +37,6 @@ export interface ScorecardSection {
   ruleId: string;
   ruleTitle: string;
   passed: boolean;
-  score: number;    // actual points earned
-  maxScore: number; // maximum possible points
   weight: "critical" | "moderate" | "bonus";
   details: string;
   extractedValue?: string; // populated for extraction-type rules
@@ -55,9 +51,6 @@ export interface QARule {
   extractionKey?: string; // used when expectedOutput === "extraction"
   enabled: boolean;
   order: number;
-  section?: string;   // Romanian section name
-  sectionEn?: string; // English section name
-  maxScore?: number;  // maximum points for this rule (undefined for extraction rules)
 }
 
 export interface DailyScore {
@@ -68,335 +61,106 @@ export interface DailyScore {
 
 // --- QA Rules ---
 export const qaRules: QARule[] = [
-  // ── Section I: Deschidere apel / Call Opening (max 10) ──
   {
     id: "rule-001",
-    title: "Salut & Verificare identitate",
+    title: "Greeting & Identity Verification",
     description:
-      "Agentul trebuie să salute clientul, să se prezinte cu numele și compania (Telerenta), să verifice identitatea clientului cu cel puțin două date (CNP, număr contract sau dată naștere) și să confirme că apelul este înregistrat.",
+      "Agent must greet the customer by name, state the company name, and verify the customer's identity using at least two data points (CNP, contract number, or date of birth).",
     weight: "critical",
     expectedOutput: "boolean",
     enabled: true,
     order: 1,
-    section: "Deschidere apel",
-    sectionEn: "Call Opening",
-    maxScore: 2,
   },
   {
     id: "rule-002",
-    title: "Consimțământ GDPR",
+    title: "GDPR Data Processing Consent",
     description:
-      "Agentul trebuie să informeze clientul că apelul este înregistrat și să obțină consimțământul verbal pentru prelucrarea datelor conform GDPR România, înainte de a continua.",
+      "Agent must inform the customer that the call is being recorded and obtain verbal consent for data processing in accordance with Romanian GDPR regulations before proceeding.",
     weight: "critical",
     expectedOutput: "boolean",
     enabled: true,
     order: 2,
-    section: "Deschidere apel",
-    sectionEn: "Call Opening",
-    maxScore: 2,
   },
   {
     id: "rule-003",
-    title: "Ton profesional",
+    title: "Problem Identification & Active Listening",
     description:
-      "Agentul menține un ton profesional, calm și prietenos pe toată durata deschiderii apelului. Nu folosește argou, nu întrerupe clientul și nu adoptă un ton distant sau nepoliticos.",
+      "Agent must paraphrase the customer's issue back to them to confirm understanding before offering a solution. Must use active listening cues.",
     weight: "moderate",
     expectedOutput: "boolean",
     enabled: true,
     order: 3,
-    section: "Deschidere apel",
-    sectionEn: "Call Opening",
-    maxScore: 3,
   },
   {
     id: "rule-004",
-    title: "Scopul apelului explicat",
+    title: "Product Knowledge Accuracy",
     description:
-      "Agentul explică clar scopul apelului sau confirmă motivul contactului clientului, asigurând că ambele părți înțeleg contextul conversației încă de la început.",
-    weight: "moderate",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 4,
-    section: "Deschidere apel",
-    sectionEn: "Call Opening",
-    maxScore: 3,
-  },
-
-  // ── Section II: Comunicare / Communication (max 15) ──
-  {
-    id: "rule-005",
-    title: "Claritate & Coerență",
-    description:
-      "Agentul comunică clar și coerent, fără repetări robotice, fără halucinații sau răspunsuri irelevante. Informațiile sunt prezentate logic și fără ambiguitate.",
+      "All product details, pricing, and policy information stated by the agent must be factually correct. Cross-reference with the current product database.",
     weight: "critical",
     expectedOutput: "text",
     enabled: true,
+    order: 4,
+  },
+  {
+    id: "rule-005",
+    title: "Upsell/Cross-sell Attempt",
+    description:
+      "Agent should identify at least one relevant upsell or cross-sell opportunity based on the customer's profile and current subscription.",
+    weight: "bonus",
+    expectedOutput: "boolean",
+    enabled: true,
     order: 5,
-    section: "Comunicare",
-    sectionEn: "Communication",
-    maxScore: 5,
   },
   {
     id: "rule-006",
-    title: "Acuratețea informațiilor",
+    title: "Empathy & Professionalism",
     description:
-      "Toate informațiile despre produse, prețuri și politici comunicate de agent sunt corecte din punct de vedere factual. Nu există informații eronate, completări inutile sau bucle repetitive.",
-    weight: "critical",
-    expectedOutput: "text",
-    enabled: true,
-    order: 6,
-    section: "Comunicare",
-    sectionEn: "Communication",
-    maxScore: 5,
-  },
-  {
-    id: "rule-007",
-    title: "Adaptare la nivelul clientului",
-    description:
-      "Agentul adaptează limbajul și ritmul conversației la nivelul de înțelegere al clientului, folosind termeni simpli pentru clienți obișnuiți și termeni tehnici pentru cei familiarizați cu domeniul.",
+      "Agent must maintain a professional and empathetic tone throughout the call. No use of slang, dismissive language, or interruption of the customer.",
     weight: "moderate",
     expectedOutput: "boolean",
     enabled: true,
-    order: 7,
-    section: "Comunicare",
-    sectionEn: "Communication",
-    maxScore: 5,
+    order: 6,
   },
-
-  // ── Section III: Identificare nevoie / Needs Identification (max 15) ──
+  {
+    id: "rule-007",
+    title: "Resolution & Next Steps",
+    description:
+      "Agent must clearly state the resolution or next steps, including any follow-up actions, timelines, and ticket/reference numbers.",
+    weight: "moderate",
+    expectedOutput: "text",
+    enabled: true,
+    order: 7,
+  },
   {
     id: "rule-008",
-    title: "Întrebări relevante adresate",
+    title: "Proper Call Closing",
     description:
-      "Agentul pune întrebări pertinente pentru a înțelege situația clientului: motivul apelului, istoricul problemei, așteptările clientului. Întrebările sunt deschise și orientate spre soluție.",
+      "Agent must ask if the customer has any other questions, thank them for calling, and provide the call reference number before disconnecting.",
     weight: "moderate",
     expectedOutput: "boolean",
     enabled: true,
     order: 8,
-    section: "Identificare nevoie",
-    sectionEn: "Needs Identification",
-    maxScore: 5,
   },
   {
     id: "rule-009",
-    title: "Ascultare activă",
+    title: "Hold Time Compliance",
     description:
-      "Agentul demonstrează ascultare activă: parafrazează preocupările clientului, confirmă înțelegerea și nu întrerupe. Folosește indicatori verbali de ascultare.",
+      "Any hold placed during the call must not exceed 90 seconds without the agent returning to provide a status update to the customer.",
     weight: "moderate",
     expectedOutput: "boolean",
-    enabled: true,
+    enabled: false,
     order: 9,
-    section: "Identificare nevoie",
-    sectionEn: "Needs Identification",
-    maxScore: 5,
   },
   {
     id: "rule-010",
-    title: "Înțelegerea situației clientului",
+    title: "Prohibited Language Detection",
     description:
-      "Agentul demonstrează că a înțeles corect situația clientului înainte de a propune soluții. Rezumă sau confirmă problema clientului cu acuratețe.",
-    weight: "moderate",
+      "Detect any use of prohibited language, discriminatory remarks, or inappropriate content from the agent during the call.",
+    weight: "critical",
     expectedOutput: "boolean",
     enabled: true,
     order: 10,
-    section: "Identificare nevoie",
-    sectionEn: "Needs Identification",
-    maxScore: 5,
   },
-
-  // ── Section IV: Prezentare soluție / Solution Presentation (max 20) ──
-  {
-    id: "rule-011",
-    title: "Explicarea clară a produsului/situației",
-    description:
-      "Agentul explică clar produsul sau soluția oferită, inclusiv caracteristicile relevante, fără a omite informații esențiale sau a induce în eroare clientul.",
-    weight: "critical",
-    expectedOutput: "text",
-    enabled: true,
-    order: 11,
-    section: "Prezentare soluție",
-    sectionEn: "Solution Presentation",
-    maxScore: 5,
-  },
-  {
-    id: "rule-012",
-    title: "Beneficii cheie prezentate",
-    description:
-      "Agentul prezintă cel puțin două beneficii cheie relevante pentru situația clientului, personalizând prezentarea în funcție de nevoile identificate.",
-    weight: "moderate",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 12,
-    section: "Prezentare soluție",
-    sectionEn: "Solution Presentation",
-    maxScore: 5,
-  },
-  {
-    id: "rule-013",
-    title: "Costuri & Obligații explicate",
-    description:
-      "Agentul explică transparent costurile, durata contractului și orice obligații aferente soluției propuse. Nu omite informații financiare relevante.",
-    weight: "critical",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 13,
-    section: "Prezentare soluție",
-    sectionEn: "Solution Presentation",
-    maxScore: 5,
-  },
-  {
-    id: "rule-014",
-    title: "Soluție persuasivă și relevantă",
-    description:
-      "Soluția propusă este relevantă pentru situația clientului și prezentată convingător, fără a fi forțată. Agentul aliniază propunerea la nevoile reale identificate.",
-    weight: "moderate",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 14,
-    section: "Prezentare soluție",
-    sectionEn: "Solution Presentation",
-    maxScore: 5,
-  },
-
-  // ── Section V: Gestionarea obiecțiilor / Objection Handling (max 15) ──
-  {
-    id: "rule-015",
-    title: "Răspuns calm la obiecții",
-    description:
-      "Agentul răspunde calm și empatic la obiecțiile clientului, fără a deveni defensiv, agresiv sau a ignora preocupările exprimate.",
-    weight: "moderate",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 15,
-    section: "Gestionarea obiecțiilor",
-    sectionEn: "Objection Handling",
-    maxScore: 5,
-  },
-  {
-    id: "rule-016",
-    title: "Argumente relevante",
-    description:
-      "Agentul furnizează argumente concrete și relevante pentru a răspunde obiecțiilor, bazate pe fapte și beneficii reale, nu generice.",
-    weight: "moderate",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 16,
-    section: "Gestionarea obiecțiilor",
-    sectionEn: "Objection Handling",
-    maxScore: 5,
-  },
-  {
-    id: "rule-017",
-    title: "Fără conflicte / bucle",
-    description:
-      "Agentul nu intră în conflict cu clientul și nu se blochează în bucle repetitive. Dacă clientul rămâne hotărât, agentul acceptă respectuos și îndrumă spre pașii următori.",
-    weight: "critical",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 17,
-    section: "Gestionarea obiecțiilor",
-    sectionEn: "Objection Handling",
-    maxScore: 5,
-  },
-
-  // ── Section VI: Call to Action (max 15) ──
-  {
-    id: "rule-018",
-    title: "Cerere clară de acțiune",
-    description:
-      "Agentul formulează o cerere de acțiune clară și specifică pentru client (ex: confirmare abonament, programare tehnician, furnizare date), fără ambiguitate.",
-    weight: "critical",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 18,
-    section: "Call to Action",
-    sectionEn: "Call to Action",
-    maxScore: 5,
-  },
-  {
-    id: "rule-019",
-    title: "Termen concret menționat",
-    description:
-      "Agentul menționează un termen sau un interval de timp concret pentru acțiunea propusă sau pentru pașii următori (ex: '5-7 zile lucrătoare', 'până la sfârșitul zilei').",
-    weight: "moderate",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 19,
-    section: "Call to Action",
-    sectionEn: "Call to Action",
-    maxScore: 5,
-  },
-  {
-    id: "rule-020",
-    title: "Confirmare înțelegere client",
-    description:
-      "Agentul confirmă că clientul a înțeles acțiunea care urmează și este de acord cu pașii stabiliți, înainte de a încheia această secțiune.",
-    weight: "moderate",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 20,
-    section: "Call to Action",
-    sectionEn: "Call to Action",
-    maxScore: 5,
-  },
-
-  // ── Section VII: Control (max 5) ──
-  {
-    id: "rule-021",
-    title: "Control direcție conversație",
-    description:
-      "Agentul menține controlul conversației, ghidând discuția spre obiectivul apelului fără a fi autoritar. Readuce conversația pe traiectoria corectă dacă clientul deviază.",
-    weight: "moderate",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 21,
-    section: "Control",
-    sectionEn: "Control",
-    maxScore: 3,
-  },
-  {
-    id: "rule-022",
-    title: "Fără devieri inutile",
-    description:
-      "Agentul nu introduce subiecte irelevante și nu permite conversației să se abată nejustificat de la scopul apelului.",
-    weight: "moderate",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 22,
-    section: "Control",
-    sectionEn: "Control",
-    maxScore: 2,
-  },
-
-  // ── Section VIII: Închidere apel / Closing (max 5) ──
-  {
-    id: "rule-023",
-    title: "Rezumat pași următori",
-    description:
-      "Agentul rezumă clar pașii următori stabiliți, menționând numărul de referință al apelului sau al tichetului și orice acțiuni pendinte.",
-    weight: "moderate",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 23,
-    section: "Închidere apel",
-    sectionEn: "Closing",
-    maxScore: 3,
-  },
-  {
-    id: "rule-024",
-    title: "Închidere politicoasă",
-    description:
-      "Agentul încheie apelul politicos, mulțumind clientului pentru apel, urând o zi bună și așteptând ca clientul să închidă primul dacă este posibil.",
-    weight: "moderate",
-    expectedOutput: "boolean",
-    enabled: true,
-    order: 24,
-    section: "Închidere apel",
-    sectionEn: "Closing",
-    maxScore: 2,
-  },
-
-  // ── Extraction Rules ──
   {
     id: "rule-ext-001",
     title: "Customer Name Extraction",
@@ -406,7 +170,7 @@ export const qaRules: QARule[] = [
     expectedOutput: "extraction",
     extractionKey: "customer_name",
     enabled: true,
-    order: 25,
+    order: 11,
   },
   {
     id: "rule-ext-002",
@@ -417,7 +181,7 @@ export const qaRules: QARule[] = [
     expectedOutput: "extraction",
     extractionKey: "intent",
     enabled: true,
-    order: 26,
+    order: 12,
   },
   {
     id: "rule-ext-003",
@@ -428,14 +192,9 @@ export const qaRules: QARule[] = [
     expectedOutput: "extraction",
     extractionKey: "sentiment",
     enabled: true,
-    order: 27,
+    order: 13,
   },
 ];
-
-// Total max score across all scoring rules
-export const TOTAL_MAX_SCORE = qaRules
-  .filter((r) => r.expectedOutput !== "extraction" && r.maxScore !== undefined)
-  .reduce((sum, r) => sum + (r.maxScore ?? 0), 0); // = 100
 
 // --- Agents ---
 const agents = [
@@ -452,7 +211,7 @@ const agents = [
 // --- Sample Transcript ---
 function generateTranscript(): TranscriptLine[] {
   return [
-    { speaker: "speaker_0", timestamp: 0, text: "Bună ziua, ați sunat la Telerenta, mă numesc Maria Popescu. Cu ce vă pot ajuta astăzi?" },
+    { speaker: "speaker_0", timestamp: 0, text: "Bună ziua, ați sunat la Telecom România, mă numesc Maria Popescu. Cu ce vă pot ajuta astăzi?" },
     { speaker: "speaker_1", timestamp: 5, text: "Bună ziua. Am o problemă cu factura din luna aceasta. Mi s-a facturat o sumă mai mare decât de obicei." },
     { speaker: "speaker_0", timestamp: 14, text: "Îmi pare rău să aud asta. Vă rog să-mi spuneți numărul de contract și CNP-ul pentru a vă verifica identitatea." },
     { speaker: "speaker_1", timestamp: 22, text: "Sigur, numărul de contract este TC-2024-87432 și CNP-ul este 2850315..." },
@@ -498,46 +257,6 @@ const repeatCallerProfiles = [
   { phone: "+40 799 888 999", name: "Ioana Radu", callIndices: [7, 33, 47] },
 ];
 
-// --- Grade calculation ---
-function calculateGrade(
-  percentage: number,
-  hasCriticalFailure: boolean
-): "Excellent" | "Good" | "Acceptable" | "Poor" {
-  if (hasCriticalFailure) return "Poor";
-  if (percentage >= 90) return "Excellent";
-  if (percentage >= 75) return "Good";
-  if (percentage >= 60) return "Acceptable";
-  return "Poor";
-}
-
-// --- Improvement advice by failed sections ---
-const IMPROVEMENT_ADVICE_BY_RULE: Record<string, string> = {
-  "rule-001": "Revizuiți scriptul de deschidere pentru a asigura verificarea completă a identității clientului.",
-  "rule-002": "Asigurați-vă că obțineți consimțământul GDPR verbal înainte de orice altă discuție.",
-  "rule-003": "Lucrați la menținerea unui ton profesional și empatic pe tot parcursul apelului.",
-  "rule-004": "Explicați clar scopul apelului la început pentru a seta așteptări corecte.",
-  "rule-005": "Evitați repetările inutile și asigurați coerența mesajului transmis.",
-  "rule-006": "Verificați întotdeauna informațiile despre produse și prețuri înainte de a le comunica clientului.",
-  "rule-007": "Adaptați limbajul la nivelul tehnic al clientului pentru o comunicare mai eficientă.",
-  "rule-008": "Adresați mai multe întrebări deschise pentru a înțelege complet situația clientului.",
-  "rule-009": "Exersați tehnici de ascultare activă: parafrazare, confirmare, indicatori verbali.",
-  "rule-010": "Rezumați situația clientului înainte de a propune soluții pentru a confirma înțelegerea.",
-  "rule-011": "Asigurați-vă că explicați produsul/soluția complet și fără ambiguitate.",
-  "rule-012": "Prezentați minimum două beneficii relevante pentru situația specifică a clientului.",
-  "rule-013": "Explicați transparent toate costurile și obligațiile contractuale asociate soluției propuse.",
-  "rule-014": "Personalizați propunerea în funcție de nevoile identificate pentru o abordare mai convingătoare.",
-  "rule-015": "Mențineți calmul și empatia atunci când clientul ridică obiecții.",
-  "rule-016": "Pregătiți argumente concrete și specifice pentru obiecțiile frecvente ale clienților.",
-  "rule-017": "Evitați bucle repetitive — dacă clientul refuză, acceptați respectuos și îndrumați spre pașii următori.",
-  "rule-018": "Formulați o cerere de acțiune clară și specifică la finalul prezentării.",
-  "rule-019": "Menționați întotdeauna un termen concret pentru acțiunile stabilite.",
-  "rule-020": "Confirmați că clientul a înțeles și este de acord cu acțiunile stabilite înainte de a continua.",
-  "rule-021": "Exersați tehnici de reorientare a conversației pentru a menține controlul fără a fi autoritar.",
-  "rule-022": "Fiți conștient de deviațiile inutile și readuceți conversația la subiect politicos.",
-  "rule-023": "Rezumați întotdeauna pașii următori și numărul de referință la finalul apelului.",
-  "rule-024": "Încheiați apelul politicos, mulțumind clientului și urând o zi bună.",
-};
-
 // --- Generate Calls ---
 function generateCalls(): Call[] {
   const calls: Call[] = [];
@@ -551,124 +270,62 @@ function generateCalls(): Call[] {
     });
   });
 
-  // Seeded pseudo-random for deterministic generation
-  const seededRand = (seed: number) => {
-    const x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
-  };
-
   for (let i = 0; i < 50; i++) {
     const agent = agents[i % agents.length];
+    const score = Math.floor(Math.random() * 40) + 60;
     const status = statuses[i % statuses.length];
     const failedRules: string[] = [];
     const scorecardSections: ScorecardSection[] = [];
     const extractions: Record<string, string> = {};
 
-    let totalEarned = 0;
-    let totalPossible = 0;
-
-    // Determine if this call has a critical failure (independent of rule scoring)
-    const hasCriticalFailure = seededRand(i * 7 + 3) < 0.08; // ~8% of calls
-
-    const scoringRules = qaRules.filter(
-      (r) => r.enabled && r.expectedOutput !== "extraction"
-    );
-
-    scoringRules.forEach((rule, ruleIdx) => {
-      const maxScore = rule.maxScore ?? 0;
-      totalPossible += maxScore;
-
-      // Pass probability: critical = 80%, moderate = 87%
-      const passProbability = rule.weight === "critical" ? 0.80 : 0.87;
-      const rand = seededRand(i * 31 + ruleIdx * 13 + 7);
-      const passed = rand < passProbability;
-
-      let score = 0;
-      if (passed) {
-        if (rule.expectedOutput === "text") {
-          // Text rules can have partial scores (70-100% of max)
-          const partial = seededRand(i * 17 + ruleIdx * 5 + 11);
-          score = Math.round(maxScore * (0.7 + partial * 0.3));
-        } else {
-          score = maxScore;
+    qaRules.filter((r) => r.enabled).forEach((rule) => {
+      if (rule.expectedOutput === "extraction" && rule.extractionKey) {
+        let value = "N/A";
+        if (rule.extractionKey === "customer_name") {
+          // Check if this call belongs to a repeat caller
+          const callerProfile = repeatCallerProfiles.find(p => p.callIndices.includes(i));
+          value = callerProfile
+            ? callerProfile.name
+            : (Math.random() > 0.15 ? mockCustomerNames[i % mockCustomerNames.length] : "N/A");
+        } else if (rule.extractionKey === "intent") {
+          value = mockIntents[i % mockIntents.length];
+        } else if (rule.extractionKey === "sentiment") {
+          value = mockSentiments[i % mockSentiments.length];
         }
-      } else {
-        failedRules.push(rule.id);
-        if (rule.expectedOutput === "text") {
-          // Text rules may earn partial credit even when "failed" (0-40%)
-          const partial = seededRand(i * 23 + ruleIdx * 7 + 3);
-          score = Math.round(maxScore * partial * 0.4);
-        } else {
-          score = 0;
-        }
+        extractions[rule.extractionKey] = value;
+        scorecardSections.push({
+          ruleId: rule.id,
+          ruleTitle: rule.title,
+          passed: value !== "N/A",
+          weight: rule.weight,
+          details: value !== "N/A" ? `Extracted: ${value}` : "Could not extract — value not present in transcript.",
+          extractedValue: value,
+        });
+        return;
       }
-
-      totalEarned += score;
-
+      const passed = Math.random() > (rule.weight === "critical" ? 0.25 : rule.weight === "moderate" ? 0.15 : 0.3);
+      if (!passed) failedRules.push(rule.id);
       scorecardSections.push({
         ruleId: rule.id,
         ruleTitle: rule.title,
         passed,
-        score,
-        maxScore,
         weight: rule.weight,
         details: passed
-          ? "Cerință îndeplinită cu succes."
-          : `Cerința nu a fost îndeplinită. ${rule.weight === "critical" ? "Aceasta este o eroare critică de conformitate." : "Se recomandă îmbunătățire."}`,
+          ? "Requirement met successfully."
+          : `Agent did not satisfy this requirement. ${rule.weight === "critical" ? "This is a critical compliance failure." : "Improvement recommended."}`,
       });
     });
 
-    // Extraction rules
-    qaRules.filter((r) => r.enabled && r.expectedOutput === "extraction" && r.extractionKey).forEach((rule) => {
-      let value = "N/A";
-      if (rule.extractionKey === "customer_name") {
-        const callerProfile = repeatCallerProfiles.find(p => p.callIndices.includes(i));
-        value = callerProfile
-          ? callerProfile.name
-          : (seededRand(i * 3 + 1) > 0.15 ? mockCustomerNames[i % mockCustomerNames.length] : "N/A");
-      } else if (rule.extractionKey === "intent") {
-        value = mockIntents[i % mockIntents.length];
-      } else if (rule.extractionKey === "sentiment") {
-        value = mockSentiments[i % mockSentiments.length];
-      }
-      extractions[rule.extractionKey!] = value;
-      scorecardSections.push({
-        ruleId: rule.id,
-        ruleTitle: rule.title,
-        passed: value !== "N/A",
-        score: 0,
-        maxScore: 0,
-        weight: rule.weight,
-        details: value !== "N/A" ? `Extras: ${value}` : "Nu s-a putut extrage — valoarea lipsește din transcript.",
-        extractedValue: value,
-      });
-    });
-
-    const overallScore = totalPossible > 0
-      ? Math.round((totalEarned / totalPossible) * 100)
-      : 0;
-
-    const compliancePass = !hasCriticalFailure && !failedRules.some((id) => {
+    const compliancePass = !failedRules.some((id) => {
       const rule = qaRules.find((r) => r.id === id);
       return rule?.weight === "critical";
     });
 
-    const grade = calculateGrade(overallScore, hasCriticalFailure);
-
-    // Build improvement advice from failed rules
-    const adviceItems = failedRules
-      .slice(0, 3)
-      .map((id) => IMPROVEMENT_ADVICE_BY_RULE[id])
-      .filter(Boolean);
-
-    if (hasCriticalFailure) {
-      adviceItems.unshift("ATENȚIE: Apelul conține un eșec critic care necesită revizuire imediată de către supervizor.");
-    }
-
     const date = new Date(2024, 2, 26 - Math.floor(i / 3));
-    date.setHours(8 + (i % 10), Math.floor(seededRand(i * 11) * 60));
+    date.setHours(8 + (i % 10), Math.floor(Math.random() * 60));
 
-    const customerPhone = indexToPhone[i] || `+40 7${String(Math.floor(seededRand(i * 5 + 2) * 90000000) + 10000000)}`;
+    // Use repeat caller phone if available, otherwise generate random
+    const customerPhone = indexToPhone[i] || `+40 7${String(Math.floor(Math.random() * 90000000) + 10000000)}`;
 
     calls.push({
       id: `CALL-${String(1000 + i)}`,
@@ -676,37 +333,35 @@ function generateCalls(): Call[] {
       agentName: agent.name,
       agentId: agent.id,
       customerPhone,
-      duration: Math.floor(seededRand(i * 7 + 1) * 600) + 120,
-      qaScore: overallScore,
+      duration: Math.floor(Math.random() * 600) + 120,
+      qaScore: score,
       status,
       rulesFailed: failedRules,
       compliancePass,
       transcript: generateTranscript(),
       aiScorecard: {
-        overallScore,
-        grade,
-        summary: failedRules.length > 0 || hasCriticalFailure
-          ? "Au fost detectate probleme de conformitate. Agentul necesită o sesiune de coaching privind procedurile de deschidere și respectarea scriptului."
-          : "Apel gestionat profesional, cu empatie adecvată și rezolvare eficientă a problemei. Agentul a respectat toate cerințele de calitate.",
-        improvementAdvice: adviceItems.length > 0 ? adviceItems : ["Performanță excelentă. Mențineți standardele ridicate."],
+        overallScore: score,
+        summary: failedRules.length > 0
+          ? "Compliance issues detected. Agent needs refresher on GDPR consent and opening procedures. Review call script adherence."
+          : "Professional call handling with good empathy and problem resolution. Agent followed all compliance requirements.",
         sections: scorecardSections,
         extractions,
-        issuesDetected: failedRules.length > 0 || hasCriticalFailure
+        issuesDetected: failedRules.length > 0
           ? [
-              ...(!compliancePass ? ["Eșec critic de conformitate detectat — revizuire imediată necesară."] : []),
+              ...(!compliancePass ? ["Critical compliance failure detected — immediate review required."] : []),
               ...failedRules.slice(0, 2).map((id) => {
                 const rule = qaRules.find((r) => r.id === id);
-                return `Nerealizat: ${rule?.title}`;
+                return `Failed: ${rule?.title}`;
               }),
             ]
-          : ["Nu au fost detectate probleme. Apelul îndeplinește toate standardele de calitate."],
+          : ["No issues detected. Call meets all quality standards."],
         coachingNotes: failedRules.length > 0
           ? [
-              "Revizuiți scriptul de deschidere pentru a asigura completarea tuturor pașilor de verificare.",
-              "Exersați tehnicile de ascultare activă — repetați preocuparea clientului înainte de a răspunde.",
-              "Nu uitați să menționați numărul de referință al apelului la închidere.",
+              "Review the opening script to ensure all verification steps are completed.",
+              "Practice active listening techniques — repeat back the customer's concern before responding.",
+              "Remember to mention the call reference number during closing.",
             ]
-          : ["Performanță excelentă. Considerați acest apel ca exemplu de training pentru agenții noi."],
+          : ["Excellent performance. Consider this call as a training example for new agents."],
       },
       rawJson: {
         call_id: `CALL-${String(1000 + i)}`,
@@ -717,17 +372,22 @@ function generateCalls(): Call[] {
         analysis_model: "anthropic/claude-3.5-sonnet",
         analysis_timestamp: new Date().toISOString(),
         scores: {
-          overall: overallScore,
-          grade,
-          total_earned: totalEarned,
-          total_possible: totalPossible,
+          overall: score,
+          greeting: Math.random() > 0.2,
+          gdpr_consent: Math.random() > 0.25,
+          active_listening: Math.random() > 0.15,
+          product_accuracy: Math.random() > 0.2 ? "All statements verified" : "Pricing discrepancy detected",
+          upsell_attempt: Math.random() > 0.4,
+          empathy: Math.random() > 0.1,
+          resolution: Math.random() > 0.15 ? "Issue resolved with credit applied" : "Escalation required",
+          closing: Math.random() > 0.2,
         },
         metadata: {
           agent_id: agent.id,
           customer_phone_hash: "sha256:a1b2c3d4...",
-          duration_seconds: Math.floor(seededRand(i * 7 + 1) * 600) + 120,
-          hold_time_seconds: Math.floor(seededRand(i * 9 + 4) * 60),
-          silence_percentage: (seededRand(i * 13 + 6) * 15).toFixed(1),
+          duration_seconds: Math.floor(Math.random() * 600) + 120,
+          hold_time_seconds: Math.floor(Math.random() * 60),
+          silence_percentage: (Math.random() * 15).toFixed(1),
         },
       },
     });
@@ -817,7 +477,7 @@ export const defaultSonioxSettings = {
 };
 
 export const defaultCustomVocabulary = [
-  "Telerenta",
+  "Telecom România",
   "abonament",
   "factură",
   "creditare",
