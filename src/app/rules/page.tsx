@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -29,7 +29,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { qaRules, type QARule } from "@/lib/mockData";
+import { qaRules, TOTAL_MAX_SCORE, type QARule } from "@/lib/mockData";
 import { saveQARule, deleteQARule, saveMainPrompt } from "@/lib/actions";
 import {
   Plus,
@@ -47,9 +47,9 @@ import {
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
-const DEFAULT_MAIN_PROMPT = `You are a QA analyst evaluating a customer service call transcript. Your task is to assess the call against the quality criteria below and return a structured JSON scorecard.
+const DEFAULT_MAIN_PROMPT = `Ești un analist QA care evaluează transcriptul unui apel de la un centru de apeluri. Sarcina ta este să evaluezi apelul conform criteriilor de calitate de mai jos și să returnezi un scorecard JSON structurat.
 
-Be objective, fair, and consistent. Base your assessment only on what is explicitly stated in the transcript. For each rule, provide a clear determination and a brief explanation.`;
+Fii obiectiv, corect și consistent. Bazează evaluarea exclusiv pe ceea ce este exprimat explicit în transcript. Pentru fiecare regulă, oferă o determinare clară și o explicație scurtă.`;
 
 export default function RulesEnginePage() {
   const [rules, setRules] = useState<QARule[]>(qaRules);
@@ -77,6 +77,7 @@ export default function RulesEnginePage() {
     expectedOutput: "boolean",
     enabled: true,
     order: rules.length + 1,
+    maxScore: 5,
   };
 
   const openNew = () => {
@@ -153,34 +154,67 @@ export default function RulesEnginePage() {
     return "Text";
   };
 
+  // Group rules by section (extraction rules go into a separate group)
+  const groupedRules = useMemo(() => {
+    const groups: { section: string; sectionEn?: string; rules: QARule[] }[] = [];
+    const sectionMap = new Map<string, { section: string; sectionEn?: string; rules: QARule[] }>();
+
+    rules.forEach((rule) => {
+      const key = rule.section ?? "__extraction__";
+      if (!sectionMap.has(key)) {
+        const group = {
+          section: rule.section ?? "Extracții",
+          sectionEn: rule.sectionEn,
+          rules: [],
+        };
+        sectionMap.set(key, group);
+        groups.push(group);
+      }
+      sectionMap.get(key)!.rules.push(rule);
+    });
+
+    return groups;
+  }, [rules]);
+
+  // Total max score of enabled scoring rules
+  const enabledMaxScore = rules
+    .filter((r) => r.enabled && r.expectedOutput !== "extraction" && r.maxScore !== undefined)
+    .reduce((sum, r) => sum + (r.maxScore ?? 0), 0);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            QA Rules Engine
+            Motor Reguli QA
           </h1>
           <p className="text-muted-foreground">
-            Manage the LLM assessment criteria for call quality analysis.
+            Gestionați criteriile de evaluare LLM pentru analiza calității apelurilor.
           </p>
         </div>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4 mr-2" /> Add Rule
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-right">
+            <div className="text-muted-foreground">Scor total posibil</div>
+            <div className="font-bold text-lg">{enabledMaxScore} <span className="text-muted-foreground font-normal text-sm">/ {TOTAL_MAX_SCORE} max</span></div>
+          </div>
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4 mr-2" /> Adaugă Regulă
+          </Button>
+        </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>
-                {editingRule?.id ? "Edit Rule" : "New Rule"}
+                {editingRule?.id ? "Editare Regulă" : "Regulă Nouă"}
               </DialogTitle>
               <DialogDescription>
-                Define the assessment criteria for the LLM to evaluate.
+                Definiți criteriile de evaluare pentru LLM.
               </DialogDescription>
             </DialogHeader>
             {editingRule && (
               <div className="space-y-4 py-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="rule-title">Rule Title</Label>
+                  <Label htmlFor="rule-title">Titlu Regulă</Label>
                   <Input
                     id="rule-title"
                     value={editingRule.title}
@@ -190,12 +224,12 @@ export default function RulesEnginePage() {
                         title: e.target.value,
                       })
                     }
-                    placeholder="e.g., Greeting & Identity Verification"
+                    placeholder="ex: Salut & Verificare identitate"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="rule-desc">
-                    Description (Prompt Instruction)
+                    Descriere (Instrucțiune Prompt)
                   </Label>
                   <Textarea
                     id="rule-desc"
@@ -207,12 +241,42 @@ export default function RulesEnginePage() {
                         description: e.target.value,
                       })
                     }
-                    placeholder="Describe what the LLM should evaluate..."
+                    placeholder="Descrieți ce trebuie să evalueze LLM-ul..."
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label>Weight / Importance</Label>
+                    <Label htmlFor="rule-section">Secțiune</Label>
+                    <Input
+                      id="rule-section"
+                      value={editingRule.section ?? ""}
+                      onChange={(e) =>
+                        setEditingRule({
+                          ...editingRule,
+                          section: e.target.value || undefined,
+                        })
+                      }
+                      placeholder="ex: Deschidere apel"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rule-section-en">Secțiune (EN)</Label>
+                    <Input
+                      id="rule-section-en"
+                      value={editingRule.sectionEn ?? ""}
+                      onChange={(e) =>
+                        setEditingRule({
+                          ...editingRule,
+                          sectionEn: e.target.value || undefined,
+                        })
+                      }
+                      placeholder="ex: Call Opening"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>Importanță</Label>
                     <Select
                       value={editingRule.weight}
                       onValueChange={(v) =>
@@ -226,14 +290,14 @@ export default function RulesEnginePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="critical">Critical</SelectItem>
-                        <SelectItem value="moderate">Moderate</SelectItem>
+                        <SelectItem value="critical">Critic</SelectItem>
+                        <SelectItem value="moderate">Moderat</SelectItem>
                         <SelectItem value="bonus">Bonus</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Output Type</Label>
+                    <Label>Tip Output</Label>
                     <Select
                       value={editingRule.expectedOutput}
                       onValueChange={(v) =>
@@ -249,15 +313,37 @@ export default function RulesEnginePage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="boolean">Boolean (Pass/Fail)</SelectItem>
-                        <SelectItem value="text">Text Response</SelectItem>
-                        <SelectItem value="extraction">Extraction (extract value)</SelectItem>
+                        <SelectItem value="text">Text (parțial)</SelectItem>
+                        <SelectItem value="extraction">Extracție</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
+                {editingRule.expectedOutput !== "extraction" && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rule-max-score">Scor Maxim</Label>
+                    <Input
+                      id="rule-max-score"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={editingRule.maxScore ?? ""}
+                      onChange={(e) =>
+                        setEditingRule({
+                          ...editingRule,
+                          maxScore: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                        })
+                      }
+                      placeholder="ex: 5"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Numărul maxim de puncte acordate pentru această regulă.
+                    </p>
+                  </div>
+                )}
                 {editingRule.expectedOutput === "extraction" && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="rule-extraction-key">Extraction Key</Label>
+                    <Label htmlFor="rule-extraction-key">Cheie Extracție</Label>
                     <Input
                       id="rule-extraction-key"
                       value={editingRule.extractionKey ?? ""}
@@ -267,11 +353,11 @@ export default function RulesEnginePage() {
                           extractionKey: e.target.value.toLowerCase().replace(/\s+/g, "_"),
                         })
                       }
-                      placeholder="e.g. customer_name, intent, sentiment"
+                      placeholder="ex: customer_name, intent, sentiment"
                       className="font-mono text-sm"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Snake_case identifier. The extracted value will be stored under this key and shown in the Call Information panel.
+                      Identificator snake_case. Valoarea extrasă va fi stocată sub această cheie.
                     </p>
                   </div>
                 )}
@@ -282,7 +368,7 @@ export default function RulesEnginePage() {
                       setEditingRule({ ...editingRule, enabled: v })
                     }
                   />
-                  <Label>Enabled</Label>
+                  <Label>Activată</Label>
                 </div>
               </div>
             )}
@@ -291,10 +377,10 @@ export default function RulesEnginePage() {
                 variant="outline"
                 onClick={() => setDialogOpen(false)}
               >
-                Cancel
+                Anulează
               </Button>
               <Button onClick={handleSave} disabled={saving}>
-                {saving ? "Saving..." : "Save Rule"}
+                {saving ? "Se salvează..." : "Salvează Regula"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -307,9 +393,9 @@ export default function RulesEnginePage() {
           <div className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
             <div>
-              <CardTitle>Main Prompt</CardTitle>
+              <CardTitle>Prompt Principal</CardTitle>
               <CardDescription>
-                This is the system instruction sent to the LLM. The rules below are automatically appended as evaluation criteria.
+                Aceasta este instrucțiunea de sistem trimisă LLM-ului. Regulile de mai jos sunt adăugate automat ca criterii de evaluare.
               </CardDescription>
             </div>
           </div>
@@ -320,13 +406,13 @@ export default function RulesEnginePage() {
               rows={6}
               value={mainPrompt}
               onChange={(e) => setMainPrompt(e.target.value)}
-              placeholder="Enter the main LLM instruction..."
+              placeholder="Introduceți instrucțiunea principală LLM..."
               className="font-mono text-sm"
             />
             <div className="flex items-center gap-3">
               <Button onClick={handlePromptSave} disabled={promptSaving}>
                 {promptSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Save Prompt
+                Salvează Promptul
               </Button>
               {promptStatus && (
                 <span className="text-sm text-green-600 flex items-center gap-1">
@@ -336,102 +422,138 @@ export default function RulesEnginePage() {
             </div>
             <Separator />
             <p className="text-xs text-muted-foreground">
-              After this prompt, each enabled rule below will be appended as a numbered evaluation criterion in the format: <span className="font-mono bg-muted px-1 rounded">Rule N: [Title] — [Description]</span>
+              După acest prompt, fiecare regulă activată va fi adăugată ca criteriu de evaluare numerotat în formatul: <span className="font-mono bg-muted px-1 rounded">Regula N: [Titlu] — [Descriere]</span>
             </p>
           </div>
         </CardContent>
       </Card>
 
-      {/* Rules List */}
-      <div className="space-y-3">
-        {rules.map((rule, index) => (
-          <Card
-            key={rule.id}
-            className={!rule.enabled ? "opacity-50" : ""}
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-4">
-                {/* Reorder Controls */}
-                <div className="flex flex-col items-center gap-1 pt-1">
-                  <GripVertical className="h-4 w-4 text-muted-foreground" />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => moveRule(index, "up")}
-                    disabled={index === 0}
-                  >
-                    <ArrowUp className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => moveRule(index, "down")}
-                    disabled={index === rules.length - 1}
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                  </Button>
-                </div>
+      {/* Rules List grouped by section */}
+      <div className="space-y-6">
+        {groupedRules.map((group) => {
+          const groupMaxScore = group.rules
+            .filter((r) => r.enabled && r.maxScore !== undefined)
+            .reduce((sum, r) => sum + (r.maxScore ?? 0), 0);
+          const isExtractionGroup = !group.rules[0]?.section;
 
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    {rule.expectedOutput === "extraction"
-                      ? <Tag className="h-4 w-4 text-blue-500" />
-                      : weightIcon(rule.weight)}
-                    <span className="font-semibold">{rule.title}</span>
-                    {rule.expectedOutput !== "extraction" && (
-                      <Badge
-                        variant={
-                          rule.weight === "critical"
-                            ? "destructive"
-                            : rule.weight === "bonus"
-                            ? "outline"
-                            : "secondary"
-                        }
-                        className="text-xs"
-                      >
-                        {rule.weight}
-                      </Badge>
+          return (
+            <div key={group.section} className="space-y-3">
+              {/* Section Header */}
+              <div className="flex items-center justify-between py-1 border-b">
+                <div>
+                  <h2 className="font-semibold text-base">
+                    {group.section}
+                    {group.sectionEn && group.sectionEn !== group.section && (
+                      <span className="text-muted-foreground font-normal ml-2 text-sm">/ {group.sectionEn}</span>
                     )}
-                    <Badge
-                      variant={rule.expectedOutput === "extraction" ? "secondary" : "outline"}
-                      className="text-xs font-mono"
-                    >
-                      {outputLabel(rule)}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {rule.description}
-                  </p>
+                  </h2>
                 </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <Switch
-                    checked={rule.enabled}
-                    onCheckedChange={() => toggleEnabled(rule.id)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openEdit(rule)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(rule.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
+                {!isExtractionGroup && groupMaxScore > 0 && (
+                  <Badge variant="outline" className="text-xs font-mono">
+                    max {groupMaxScore} pts
+                  </Badge>
+                )}
               </div>
-            </CardContent>
-          </Card>
-        ))}
+
+              {group.rules.map((rule) => {
+                const ruleIndex = rules.findIndex((r) => r.id === rule.id);
+                return (
+                  <Card
+                    key={rule.id}
+                    className={!rule.enabled ? "opacity-50" : ""}
+                  >
+                    <CardContent className="pt-6">
+                      <div className="flex items-start gap-4">
+                        {/* Reorder Controls */}
+                        <div className="flex flex-col items-center gap-1 pt-1">
+                          <GripVertical className="h-4 w-4 text-muted-foreground" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => moveRule(ruleIndex, "up")}
+                            disabled={ruleIndex === 0}
+                          >
+                            <ArrowUp className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => moveRule(ruleIndex, "down")}
+                            disabled={ruleIndex === rules.length - 1}
+                          >
+                            <ArrowDown className="h-3 w-3" />
+                          </Button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            {rule.expectedOutput === "extraction"
+                              ? <Tag className="h-4 w-4 text-blue-500" />
+                              : weightIcon(rule.weight)}
+                            <span className="font-semibold">{rule.title}</span>
+                            {rule.expectedOutput !== "extraction" && (
+                              <Badge
+                                variant={
+                                  rule.weight === "critical"
+                                    ? "destructive"
+                                    : rule.weight === "bonus"
+                                    ? "outline"
+                                    : "secondary"
+                                }
+                                className="text-xs"
+                              >
+                                {rule.weight}
+                              </Badge>
+                            )}
+                            <Badge
+                              variant={rule.expectedOutput === "extraction" ? "secondary" : "outline"}
+                              className="text-xs font-mono"
+                            >
+                              {outputLabel(rule)}
+                            </Badge>
+                            {rule.maxScore !== undefined && rule.expectedOutput !== "extraction" && (
+                              <Badge variant="outline" className="text-xs font-mono text-muted-foreground">
+                                max {rule.maxScore} pts
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {rule.description}
+                          </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Switch
+                            checked={rule.enabled}
+                            onCheckedChange={() => toggleEnabled(rule.id)}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEdit(rule)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(rule.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
