@@ -158,7 +158,11 @@ def delete_run(run_id: str, db: Session = Depends(get_db)):
     if run.status in ("downloading", "processing", "stopping"):
         return {"deleted": False, "message": f"Run {run_id} is still active. Stop it first."}
 
-    # Delete associated jobs
+    # Delete associated calls (and their transcripts + scorecards via cascade)
+    from app.models.call import Call
+    calls_deleted = db.query(Call).filter(Call.ingestion_run_id == run_id).delete(synchronize_session=False)
+
+    # Delete associated jobs and logs
     job_ids = [j.job_id for j in db.query(TranscriptionJob.job_id).filter(
         TranscriptionJob.started_at >= run.started_at,
         TranscriptionJob.started_at <= (run.completed_at or utcnow()),
@@ -169,7 +173,7 @@ def delete_run(run_id: str, db: Session = Depends(get_db)):
 
     db.delete(run)
     db.commit()
-    return {"deleted": True, "runId": run_id, "message": f"Deleted run {run_id} and {len(job_ids)} jobs."}
+    return {"deleted": True, "runId": run_id, "message": f"Deleted run {run_id}, {calls_deleted} calls, and {len(job_ids)} jobs."}
 
 
 @router.get("/status")
