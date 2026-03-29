@@ -1,6 +1,16 @@
 // ============================================================
-// Mock Actions — stubbed for demo (client-side mocks)
+// Actions — now backed by the Python FastAPI backend
 // ============================================================
+
+import {
+  saveSetting,
+  testConnection,
+  createRule,
+  updateRule,
+  deleteRule as apiDeleteRule,
+  reorderRules,
+  triggerIngestion,
+} from "./api";
 
 export async function saveSftpSettings(data: {
   host: string;
@@ -10,19 +20,17 @@ export async function saveSftpSettings(data: {
   sshKeyPath: string;
   remotePath: string;
 }) {
-  await new Promise((r) => setTimeout(r, 800));
-  console.log("[Action] SFTP settings saved:", { ...data, password: "***" });
+  await saveSetting("sftp", data);
   return { success: true, message: "SFTP settings saved successfully." };
 }
 
-export async function testSftpConnection(data: {
+export async function testSftpConnection(_data: {
   host: string;
   port: number;
   username: string;
 }) {
-  await new Promise((r) => setTimeout(r, 1500));
-  console.log("[Action] Testing SFTP connection to:", data.host);
-  return { success: true, message: `Connection to ${data.host}:${data.port} successful.` };
+  const result = await testConnection("sftp");
+  return { success: result.success, message: result.message };
 }
 
 export async function saveS3Settings(data: {
@@ -32,19 +40,21 @@ export async function saveS3Settings(data: {
   secretKey: string;
   prefix: string;
 }) {
-  await new Promise((r) => setTimeout(r, 800));
-  console.log("[Action] S3 settings saved:", { ...data, secretKey: "***" });
+  await saveSetting("s3", data);
   return { success: true, message: "S3 settings saved successfully." };
 }
 
 export async function saveMetadataMapping(data: {
-  filenamePattern: string;
-  delimiter: string;
-  agentIdPosition: number;
-  phonePosition: number;
+  filenamePattern?: string;
+  delimiter?: string;
+  agentIdPosition?: number;
+  phonePosition?: number;
+  agentIdField?: string;
+  customerPhoneField?: string;
+  dateTimeField?: string;
+  durationField?: string;
 }) {
-  await new Promise((r) => setTimeout(r, 600));
-  console.log("[Action] Metadata mapping saved:", data);
+  await saveSetting("metadata-mapping", data);
   return { success: true, message: "Metadata mapping saved successfully." };
 }
 
@@ -54,8 +64,7 @@ export async function saveLlmSettings(data: {
   temperature: number;
   maxTokens: number;
 }) {
-  await new Promise((r) => setTimeout(r, 800));
-  console.log("[Action] LLM settings saved:", { ...data, openRouterApiKey: "***" });
+  await saveSetting("llm", data);
   return { success: true, message: "LLM settings saved successfully." };
 }
 
@@ -64,14 +73,13 @@ export async function saveSonioxSettings(data: {
   language: string;
   model: string;
 }) {
-  await new Promise((r) => setTimeout(r, 600));
-  console.log("[Action] Soniox settings saved:", { ...data, apiKey: "***" });
+  await saveSetting("soniox", data);
   return { success: true, message: "Soniox settings saved successfully." };
 }
 
 export async function saveCustomVocabulary(words: string[]) {
-  await new Promise((r) => setTimeout(r, 500));
-  console.log("[Action] Custom vocabulary saved:", words.length, "terms");
+  // Store as a setting
+  await saveSetting("custom-vocabulary", { words });
   return { success: true, message: `${words.length} vocabulary terms saved.` };
 }
 
@@ -80,15 +88,13 @@ export async function saveWebhookSettings(data: {
   enabled: boolean;
   retryCount: number;
 }) {
-  await new Promise((r) => setTimeout(r, 600));
-  console.log("[Action] Webhook settings saved:", data);
+  await saveSetting("webhook", data);
   return { success: true, message: "Webhook settings saved successfully." };
 }
 
-export async function testWebhookEndpoint(url: string) {
-  await new Promise((r) => setTimeout(r, 1200));
-  console.log("[Action] Testing webhook endpoint:", url);
-  return { success: true, message: `POST to ${url} returned 200 OK.` };
+export async function testWebhookEndpoint(_url: string) {
+  const result = await testConnection("webhook");
+  return { success: result.success, message: result.message };
 }
 
 export async function saveQARule(rule: {
@@ -101,33 +107,48 @@ export async function saveQARule(rule: {
   extractionKey?: string;
   enabled: boolean;
 }) {
-  await new Promise((r) => setTimeout(r, 600));
-  const id = rule.id || `rule-${String(Date.now()).slice(-6)}`;
-  console.log("[Action] QA Rule saved:", id);
-  return { success: true, message: "Rule saved successfully.", id };
+  if (rule.id) {
+    await updateRule(rule.id, {
+      title: rule.title,
+      description: rule.description,
+      section: rule.section || "General",
+      max_score: rule.maxScore || 0,
+      enabled: rule.enabled,
+    });
+    return { success: true, message: "Rule saved successfully.", id: rule.id };
+  } else {
+    const id = `rule-${String(Date.now()).slice(-6)}`;
+    await createRule({
+      rule_id: id,
+      title: rule.title,
+      description: rule.description,
+      section: rule.section || "General",
+      rule_type: rule.extractionKey ? "extraction" : "scoring",
+      max_score: rule.maxScore || 0,
+      enabled: rule.enabled,
+      is_critical: false,
+    });
+    return { success: true, message: "Rule saved successfully.", id };
+  }
 }
 
 export async function deleteQARule(ruleId: string) {
-  await new Promise((r) => setTimeout(r, 400));
-  console.log("[Action] QA Rule deleted:", ruleId);
+  await apiDeleteRule(ruleId);
   return { success: true, message: "Rule deleted successfully." };
 }
 
 export async function reorderQARules(orderedIds: string[]) {
-  await new Promise((r) => setTimeout(r, 300));
-  console.log("[Action] QA Rules reordered:", orderedIds);
+  await reorderRules(orderedIds);
   return { success: true, message: "Rules reordered successfully." };
 }
 
 export async function saveMainPrompt(prompt: string) {
-  await new Promise((r) => setTimeout(r, 600));
-  console.log("[Action] Main prompt saved:", prompt.slice(0, 80));
+  await saveSetting("main-prompt", { prompt });
   return { success: true, message: "Main prompt saved successfully." };
 }
 
 export async function saveCallContext(context: string) {
-  await new Promise((r) => setTimeout(r, 500));
-  console.log("[Action] Call context saved:", context.slice(0, 80));
+  await saveSetting("call-context", { context });
   return { success: true, message: "Call context saved successfully." };
 }
 
@@ -135,20 +156,17 @@ export async function saveIngestSchedule(data: {
   cronHour: number;
   enabled: boolean;
 }) {
-  await new Promise((r) => setTimeout(r, 500));
-  console.log("[Action] Ingest schedule saved:", data);
-  return { success: true, message: `Schedule saved — will run daily at ${String(data.cronHour).padStart(2, "0")}:00.` };
+  await saveSetting("ingest-schedule", data);
+  return {
+    success: true,
+    message: `Schedule saved — will run daily at ${String(data.cronHour).padStart(2, "0")}:00.`,
+  };
 }
 
 export async function triggerManualIngestionCheck(remotePath: string) {
-  await new Promise((r) => setTimeout(r, 2000));
-  const resolved = remotePath.replace(
-    "$yesterday_date",
-    new Date(Date.now() - 86400000).toISOString().split("T")[0]
-  );
-  console.log("[Action] Manual ingestion check triggered for:", resolved);
+  await triggerIngestion("sftp", remotePath);
   return {
     success: true,
-    message: `Checked ${resolved} — found 12 new files, 0 already processed. Queued for ingestion.`,
+    message: "Ingestion triggered. Check logs for progress.",
   };
 }

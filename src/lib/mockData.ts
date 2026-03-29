@@ -722,18 +722,20 @@ export const defaultMetadataMapping = {
 export const defaultIngestSchedule = {
   cronHour: 6,   // 06:00 daily
   enabled: true,
+  concurrency: 5,
 };
 
 export const defaultLlmSettings = {
   openRouterApiKey: "",
-  defaultModel: "anthropic/claude-3.5-sonnet",
+  defaultModel: "anthropic/claude-4.6-sonnet",
   availableModels: [
-    "anthropic/claude-3.5-sonnet",
-    "anthropic/claude-3-opus",
-    "openai/gpt-4o",
-    "openai/gpt-4o-mini",
-    "google/gemini-pro-1.5",
-    "meta-llama/llama-3.1-405b-instruct",
+    "anthropic/claude-4.6-sonnet",
+    "anthropic/claude-4.5-opus",
+    "google/gemini-3.1-pro",
+    "google/gemini-3.0-ultra",
+    "openai/gpt-5.3-pro",
+    "openai/gpt-5.2-mini",
+    "meta-llama/llama-4-70b",
   ],
   temperature: 0.1,
   maxTokens: 4096,

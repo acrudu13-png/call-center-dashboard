@@ -1,0 +1,280 @@
+import json
+import logging
+from typing import Optional
+import httpx
+from app.schemas.setting import LlmSettings
+from app.schemas.call import AnalyzeResponse, ScorecardEntrySchema
+
+logger = logging.getLogger(__name__)
+
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+DEFAULT_MAIN_PROMPT = """Ești un evaluator QA pentru un call center de telecomunicații din România.
+Analizează transcriptul apelului și evaluează FIECARE regulă din lista de mai jos.
+
+REGULI STRICTE:
+1. Evaluează TOATE regulile — nu sări niciuna.
+2. Returnează regulile în EXACT aceeași ordine.
+3. Folosește EXACT ruleId și ruleTitle furnizate.
+4. Pentru reguli de scoring: score între 0 și maxScore. passed=true dacă score >= maxScore*0.6.
+5. Pentru reguli de extraction: extractedValue = valoarea extrasă, score=0, maxScore=0.
+6. overallScore = (totalEarned / totalPossible) * 100.
+7. grade: "Excelent" >= 90, "Bun" >= 75, "Acceptabil" >= 60, "Slab" < 60.
+8. hasCriticalFailure = true dacă orice regulă critică are passed=false.
+
+Răspunde DOAR cu JSON valid."""
+
+
+def _build_schema_for_rules(rules: list[dict]) -> dict:
+    """Build a JSON schema with a fixed-length results array matching the exact rules."""
+    result_items = []
+    for r in rules:
+        item = {
+            "type": "object",
+            "properties": {
+                "ruleId": {"type": "string", "description": f"Must be exactly: {r['rule_id']}"},
+                "ruleTitle": {"type": "string", "description": f"Must be exactly: {r['title']}"},
+                "passed": {"type": "boolean"},
+                "score": {"type": "number", "description": f"0 to {r['max_score']}"},
+                "maxScore": {"type": "number", "description": f"Must be {r['max_score']}"},
+                "details": {"type": "string", "description": "Short explanation in Romanian"},
+                "extractedValue": {"type": ["string", "null"]},
+            },
+            "required": ["ruleId", "ruleTitle", "passed", "score", "maxScore", "details", "extractedValue"],
+            "additionalProperties": False,
+        }
+        result_items.append(item)
+
+    return {
+        "name": "call_analysis",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string"},
+                "improvementAdvice": {"type": "array", "items": {"type": "string"}},
+                "grade": {"type": "string", "enum": ["Excelent", "Bun", "Acceptabil", "Slab"]},
+                "overallScore": {"type": "number"},
+                "totalEarned": {"type": "number"},
+                "totalPossible": {"type": "number"},
+                "results": {
+                    "type": "array",
+                    "items": result_items[0] if result_items else {"type": "object"},
+                    "minItems": len(rules),
+                    "maxItems": len(rules),
+                    "description": f"Exactly {len(rules)} results, one per rule, in the same order as REGULI DE EVALUARE",
+                },
+                "hasCriticalFailure": {"type": "boolean"},
+                "criticalFailureReason": {"type": ["string", "null"]},
+            },
+            "required": [
+                "summary", "improvementAdvice", "grade", "overallScore",
+                "totalEarned", "totalPossible", "results",
+                "hasCriticalFailure", "criticalFailureReason",
+            ],
+            "additionalProperties": False,
+        },
+    }
+
+
+class LLMService:
+    """Handles LLM-based QA scoring via OpenRouter."""
+
+    def __init__(self, settings: LlmSettings):
+        self.settings = settings
+
+    async def analyze_call(
+        self,
+        transcript: list[dict],
+        rules: list[dict],
+        main_prompt: Optional[str] = None,
+        log_fn=None,
+        job_id: Optional[str] = None,
+    ) -> AnalyzeResponse:
+        """
+        Send transcript + rules to LLM and return structured QA analysis.
+        """
+        def _log(level: str, msg: str):
+            logger.log(getattr(logging, level.upper(), logging.INFO), msg)
+            if log_fn:
+                log_fn(level, "analysis", msg, job_id)
+
+        if not self.settings.openRouterApiKey:
+            raise ValueError("OpenRouter API key is not configured.")
+
+        prompt = main_prompt or DEFAULT_MAIN_PROMPT
+
+        # Build rules context with numbered list so the LLM knows the exact order
+        rules_text = "\n".join(
+            f"{i+1}. [{r['rule_id']}] \"{r['title']}\" "
+            f"(max_score={r['max_score']}, type={r['rule_type']}, "
+            f"critical={r.get('is_critical', False)}): {r['description']}"
+            for i, r in enumerate(rules)
+        )
+
+        # Build the expected results template so the LLM knows exactly what to fill
+        results_template = "\n".join(
+            f'  {i+1}. ruleId="{r["rule_id"]}", ruleTitle="{r["title"]}", maxScore={r["max_score"]}'
+            for i, r in enumerate(rules)
+        )
+
+        transcript_text = "\n".join(
+            f"[{seg['timestamp']:.1f}s] {seg['speaker']}: {seg['text']}"
+            for seg in transcript
+        )
+
+        messages = [
+            {"role": "system", "content": prompt},
+            {
+                "role": "user",
+                "content": (
+                    f"REGULI DE EVALUARE ({len(rules)} reguli):\n{rules_text}\n\n"
+                    f"ORDINEA EXACTĂ a results (trebuie {len(rules)} elemente):\n{results_template}\n\n"
+                    f"TRANSCRIPT:\n{transcript_text}"
+                ),
+            },
+        ]
+
+        headers = {
+            "Authorization": f"Bearer {self.settings.openRouterApiKey}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://callcenter-dashboard.local",
+            "X-Title": "Call Center QA Dashboard",
+        }
+
+        payload = {
+            "model": self.settings.defaultModel,
+            "messages": messages,
+            "temperature": self.settings.temperature,
+            "max_tokens": self.settings.maxTokens,
+        }
+
+        # Build dynamic schema matching the exact rules
+        dynamic_schema = _build_schema_for_rules(rules)
+
+        # Log the full prompt being sent
+        user_msg = messages[1]["content"]
+        _log("info", f"=== LLM REQUEST ===\nModel: {self.settings.defaultModel}\nRules count: {len(rules)}\nPrompt length: {len(user_msg)} chars\nFirst 500 chars of user message:\n{user_msg[:500]}")
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            _log("info", f"Sending analysis request to OpenRouter ({self.settings.defaultModel}) with {len(rules)} rules...")
+
+            # Attempt 1: json_schema (structured output)
+            mode_used = "json_schema"
+            payload_with_schema = {
+                **payload,
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": dynamic_schema,
+                },
+            }
+            response = await client.post(
+                OPENROUTER_URL, headers=headers, json=payload_with_schema
+            )
+
+            if response.status_code == 400:
+                # Attempt 2: json_object mode
+                mode_used = "json_object"
+                logger.warning(f"json_schema failed (400): {response.text[:300]}. Falling back to json_object...")
+                payload_json_mode = {
+                    **payload,
+                    "response_format": {"type": "json_object"},
+                }
+                response = await client.post(
+                    OPENROUTER_URL, headers=headers, json=payload_json_mode
+                )
+
+            if response.status_code == 400:
+                # Attempt 3: plain mode
+                mode_used = "plain"
+                logger.warning(f"json_object failed (400): {response.text[:300]}. Falling back to plain...")
+                response = await client.post(
+                    OPENROUTER_URL, headers=headers, json=payload
+                )
+
+            logger.info(f"LLM response status: {response.status_code}, mode: {mode_used}")
+
+            if response.status_code != 200:
+                logger.error(f"=== LLM ERROR ===\nStatus: {response.status_code}\nBody: {response.text[:2000]}")
+
+            response.raise_for_status()
+            data = response.json()
+
+        content = data["choices"][0]["message"]["content"]
+        logger.info(f"=== LLM RESPONSE ===\nMode: {mode_used}\nLength: {len(content)} chars\nFull response:\n{content[:3000]}")
+
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError:
+            # Try to extract JSON from markdown code blocks
+            import re
+            match = re.search(r'```(?:json)?\s*([\s\S]*?)```', content)
+            if match:
+                result = json.loads(match.group(1))
+            else:
+                logger.error(f"LLM returned invalid JSON:\n{content[:2000]}")
+                raise ValueError(f"LLM returned invalid JSON. Raw:\n{content[:1000]}")
+
+        # Validate required fields — fill defaults instead of crashing
+        if "summary" not in result:
+            result["summary"] = "Rezumat indisponibil"
+        if "improvementAdvice" not in result:
+            result["improvementAdvice"] = []
+        if "grade" not in result:
+            result["grade"] = "Slab"
+        if "overallScore" not in result:
+            result["overallScore"] = 0
+        if "totalEarned" not in result:
+            result["totalEarned"] = 0
+        if "totalPossible" not in result:
+            result["totalPossible"] = sum(r["max_score"] for r in rules)
+        if "results" not in result:
+            result["results"] = []
+        if "hasCriticalFailure" not in result:
+            result["hasCriticalFailure"] = False
+        if "criticalFailureReason" not in result:
+            result["criticalFailureReason"] = None
+
+        logger.info(f"LLM returned {len(result.get('results', []))} results, grade={result.get('grade')}, score={result.get('overallScore')}")
+
+        # Validate: ensure all rules are present, fill missing ones
+        result_map = {r["ruleId"]: r for r in result.get("results", [])}
+        ordered_results = []
+        for r in rules:
+            if r["rule_id"] in result_map:
+                ordered_results.append(result_map[r["rule_id"]])
+            else:
+                # LLM missed this rule — add a default entry
+                logger.warning(f"LLM missed rule {r['rule_id']}, adding default")
+                ordered_results.append({
+                    "ruleId": r["rule_id"],
+                    "ruleTitle": r["title"],
+                    "passed": False,
+                    "score": 0,
+                    "maxScore": r["max_score"],
+                    "details": "Nu a fost evaluat de AI",
+                    "extractedValue": None,
+                })
+
+        return AnalyzeResponse(
+            summary=result["summary"],
+            improvementAdvice=result.get("improvementAdvice", [])[:4],
+            grade=result["grade"],
+            overallScore=result["overallScore"],
+            totalEarned=result["totalEarned"],
+            totalPossible=result["totalPossible"],
+            results=[
+                ScorecardEntrySchema(
+                    ruleId=r["ruleId"],
+                    ruleTitle=r["ruleTitle"],
+                    passed=r["passed"],
+                    score=r["score"],
+                    maxScore=r["maxScore"],
+                    details=r["details"],
+                    extractedValue=r.get("extractedValue"),
+                )
+                for r in ordered_results
+            ],
+            hasCriticalFailure=result["hasCriticalFailure"],
+            criticalFailureReason=result.get("criticalFailureReason"),
+        )

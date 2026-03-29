@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -33,6 +33,7 @@ import {
   saveCustomVocabulary,
   saveCallContext,
 } from "@/lib/actions";
+import { fetchSetting } from "@/lib/api";
 import {
   Brain,
   Mic,
@@ -68,6 +69,24 @@ export default function AISettingsPage() {
     setStatusMessage(msg);
     setTimeout(() => setStatusMessage(null), 3000);
   };
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const llmData = await fetchSetting<Record<string, unknown>>("llm").catch(() => null);
+        if (llmData) setLlm({ ...defaultLlmSettings, ...llmData });
+
+        const sonioxData = await fetchSetting<Record<string, unknown>>("soniox").catch(() => null);
+        if (sonioxData) setSoniox({ ...defaultSonioxSettings, ...sonioxData });
+
+        const contextData = await fetchSetting<Record<string, unknown>>("call-context").catch(() => null);
+        if (contextData?.context) setCallContext(String(contextData.context));
+      } catch (e) {
+        console.error("Failed to load settings", e);
+      }
+    }
+    loadData();
+  }, []);
 
   const handleLlmSave = async () => {
     setLlmSaving(true);
@@ -171,21 +190,52 @@ export default function AISettingsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Default Model</Label>
-              <Select
-                value={llm.defaultModel}
-                onValueChange={(v) => v && setLlm({ ...llm, defaultModel: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
+              <div className="flex gap-2">
+                <Input
+                  value={llm.defaultModel}
+                  onChange={(e) => setLlm({ ...llm, defaultModel: e.target.value })}
+                  placeholder="e.g. openai/gpt-5.4-mini"
+                  className="flex-1"
+                />
+                {llm.defaultModel && !llm.availableModels.includes(llm.defaultModel) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLlm({
+                      ...llm,
+                      availableModels: [...llm.availableModels, llm.defaultModel],
+                    })}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Save
+                  </Button>
+                )}
+              </div>
+              {llm.availableModels.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
                   {llm.availableModels.map((model) => (
-                    <SelectItem key={model} value={model}>
+                    <Badge
+                      key={model}
+                      variant={model === llm.defaultModel ? "default" : "secondary"}
+                      className="cursor-pointer gap-1 pr-1"
+                      onClick={() => setLlm({ ...llm, defaultModel: model })}
+                    >
                       {model}
-                    </SelectItem>
+                      <button
+                        className="ml-1 hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLlm({
+                            ...llm,
+                            availableModels: llm.availableModels.filter((m) => m !== model),
+                          });
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>

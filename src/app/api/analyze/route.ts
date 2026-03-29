@@ -159,7 +159,7 @@ Rules for scoring:
         "X-Title": "Telerenta QA Dashboard",
       },
       body: JSON.stringify({
-        model: "anthropic/claude-3.5-sonnet",
+        model: "anthropic/claude-4.6-sonnet",
         temperature: 0.1,
         max_tokens: 4096,
         messages: [

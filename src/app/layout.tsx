@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthShell } from "@/components/auth-shell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,17 +25,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="ro" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased font-[family-name:var(--font-geist-sans)]`}
       >
         <TooltipProvider>
-          <div className="flex min-h-screen">
-            <Sidebar />
-            <main className="flex-1 overflow-y-auto">
-              <div className="max-w-7xl mx-auto p-6">{children}</div>
-            </main>
-          </div>
+          <AuthShell>{children}</AuthShell>
         </TooltipProvider>
       </body>
     </html>

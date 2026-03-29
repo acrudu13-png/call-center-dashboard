@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -28,6 +28,7 @@ import {
   saveIngestSchedule,
   triggerManualIngestionCheck,
 } from "@/lib/actions";
+import { fetchSetting } from "@/lib/api";
 import {
   Server,
   Cloud,
@@ -83,6 +84,7 @@ export default function IngestionSettingsPage() {
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [manualChecking, setManualChecking] = useState(false);
   const [manualCheckResult, setManualCheckResult] = useState<string | null>(null);
+  const [customPath, setCustomPath] = useState("");
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -90,6 +92,27 @@ export default function IngestionSettingsPage() {
     setStatusMessage(msg);
     setTimeout(() => setStatusMessage(null), 4000);
   };
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const sftpData = await fetchSetting<Record<string, unknown>>("sftp").catch(() => null);
+        if (sftpData) setSftp({ ...defaultSftpSettings, ...sftpData });
+
+        const s3Data = await fetchSetting<Record<string, unknown>>("s3").catch(() => null);
+        if (s3Data) setS3({ ...defaultS3Settings, ...s3Data });
+
+        const metaData = await fetchSetting<Record<string, unknown>>("metadata-mapping").catch(() => null);
+        if (metaData) setMetadata({ ...defaultMetadataMapping, ...metaData });
+
+        const schedData = await fetchSetting<Record<string, unknown>>("ingest-schedule").catch(() => null);
+        if (schedData) setSchedule({ ...defaultIngestSchedule, ...schedData });
+      } catch (e) {
+        console.error("Failed to load settings from DB", e);
+      }
+    }
+    loadData();
+  }, []);
 
   const handleSftpSave = async () => {
     setSftpSaving(true);
@@ -127,7 +150,8 @@ export default function IngestionSettingsPage() {
   const handleManualCheck = async () => {
     setManualChecking(true);
     setManualCheckResult(null);
-    const result = await triggerManualIngestionCheck(sftp.remotePath);
+    const targetPath = customPath || sftp.remotePath;
+    const result = await triggerManualIngestionCheck(targetPath);
     setManualCheckResult(result.message);
     setManualChecking(false);
   };
@@ -519,6 +543,32 @@ export default function IngestionSettingsPage() {
                   </p>
                 </div>
 
+                <div className="space-y-1.5">
+                  <Label htmlFor="concurrency">Parallel Processing</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      id="concurrency"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={schedule.concurrency ?? 5}
+                      onChange={(e) =>
+                        setSchedule({
+                          ...schedule,
+                          concurrency: Math.min(20, Math.max(1, Number(e.target.value))),
+                        })
+                      }
+                      className="w-24 font-mono"
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      files processed simultaneously
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Higher values speed up ingestion but may hit API rate limits. Recommended: 3-5.
+                  </p>
+                </div>
+
                 {schedule.enabled && (
                   <div className="flex items-center gap-2 text-sm bg-muted rounded-lg px-4 py-3">
                     <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -546,9 +596,17 @@ export default function IngestionSettingsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4 max-w-xl">
-                <div className="flex items-center gap-2 text-sm bg-muted rounded-lg px-4 py-3 font-mono">
-                  <span className="text-muted-foreground">Path:</span>
-                  <span>{resolvedPath}</span>
+                <div className="space-y-1.5">
+                  <Label>Remote Path for Check</Label>
+                  <Input
+                    value={customPath}
+                    onChange={(e) => setCustomPath(e.target.value)}
+                    placeholder={resolvedPath}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank to use the default scheduled path.
+                  </p>
                 </div>
                 <Button
                   onClick={handleManualCheck}

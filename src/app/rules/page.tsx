@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -22,8 +22,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { qaRules, TOTAL_MAX_SCORE, type QARule } from "@/lib/mockData";
+import { type QARule } from "@/lib/mockData";
 import { saveQARule, deleteQARule, saveMainPrompt } from "@/lib/actions";
+import { fetchRules, fetchSetting } from "@/lib/api";
 import {
   Plus,
   GripVertical,
@@ -43,7 +44,7 @@ const DEFAULT_MAIN_PROMPT = `Ești un analist QA care evaluează transcriptul un
 Fii obiectiv, corect și consistent. Bazează evaluarea exclusiv pe ceea ce este exprimat explicit în transcript. Pentru fiecare regulă, oferă o determinare clară și o explicație scurtă.`;
 
 export default function RulesEnginePage() {
-  const [rules, setRules] = useState<QARule[]>(qaRules);
+  const [rules, setRules] = useState<QARule[]>([]);
   const [editingRule, setEditingRule] = useState<QARule | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -51,6 +52,25 @@ export default function RulesEnginePage() {
   const [mainPrompt, setMainPrompt] = useState(DEFAULT_MAIN_PROMPT);
   const [promptSaving, setPromptSaving] = useState(false);
   const [promptStatus, setPromptStatus] = useState<string | null>(null);
+
+  // Load rules and prompt from API
+  useEffect(() => {
+    fetchRules().then((apiRules) => {
+      setRules(apiRules.map((r) => ({
+        id: r.rule_id,
+        title: r.title,
+        description: r.description,
+        section: r.section,
+        maxScore: r.max_score > 0 ? r.max_score : undefined,
+        extractionKey: r.rule_type === "extraction" ? r.rule_id : undefined,
+        enabled: r.enabled,
+        order: r.sort_order,
+      })));
+    }).catch(() => {});
+    fetchSetting<{ prompt: string }>("main-prompt").then((data) => {
+      if (data?.prompt) setMainPrompt(data.prompt);
+    }).catch(() => {});
+  }, []);
 
   const handlePromptSave = async () => {
     setPromptSaving(true);
@@ -166,7 +186,7 @@ export default function RulesEnginePage() {
         <div className="flex items-center gap-3">
           <div className="text-sm text-right">
             <div className="text-muted-foreground">Scor total posibil</div>
-            <div className="font-bold text-lg">{enabledMaxScore} <span className="text-muted-foreground font-normal text-sm">/ {TOTAL_MAX_SCORE} max</span></div>
+            <div className="font-bold text-lg">{enabledMaxScore} <span className="text-muted-foreground font-normal text-sm">/ {rules.reduce((sum, r) => sum + (r.maxScore ?? 0), 0)} max</span></div>
           </div>
           <Button onClick={openNew}>
             <Plus className="h-4 w-4 mr-2" /> Adaugă Regulă

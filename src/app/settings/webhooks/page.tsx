@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { defaultWebhookSettings } from "@/lib/mockData";
 import { saveWebhookSettings, testWebhookEndpoint } from "@/lib/actions";
+import { fetchSetting } from "@/lib/api";
 import {
   Webhook,
   CheckCircle2,
@@ -28,6 +29,20 @@ export default function WebhooksPage() {
   const [testing, setTesting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const data = await fetchSetting<Record<string, unknown>>("webhook").catch(() => null);
+        if (data) {
+          setWebhook({ ...defaultWebhookSettings, ...data });
+        }
+      } catch (e) {
+        console.error("Failed to load settings from DB", e);
+      }
+    }
+    loadData();
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
