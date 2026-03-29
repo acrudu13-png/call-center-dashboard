@@ -183,8 +183,12 @@ export default function CallDetailClient({
     );
   }
 
+  const transcript = call.transcript || [];
+  const rulesFailed = call.rulesFailed || [];
+  const improvementAdvice = call.aiImprovementAdvice || [];
+
   const speakerIndex: Record<string, number> = {};
-  (call.transcript || []).forEach(({ speaker }) => {
+  transcript.forEach(({ speaker }) => {
     if (!(speaker in speakerIndex)) {
       speakerIndex[speaker] = Object.keys(speakerIndex).length;
     }
@@ -307,7 +311,7 @@ export default function CallDetailClient({
           )}
 
           {/* Improvement Advice */}
-          {call.aiImprovementAdvice && call.aiImprovementAdvice.length > 0 && (
+          {improvementAdvice.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -317,7 +321,7 @@ export default function CallDetailClient({
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2">
-                  {call.aiImprovementAdvice.map((advice, idx) => (
+                  {improvementAdvice.map((advice, idx) => (
                     <li key={idx} className="flex items-start gap-3 text-sm">
                       <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
                         {idx + 1}
@@ -350,7 +354,7 @@ export default function CallDetailClient({
             <CardContent>
               <ScrollArea className="h-96">
                 <div className="space-y-1">
-                  {(call.transcript || []).map((entry, idx) => {
+                  {transcript.map((entry, idx) => {
                     const n = speakerIndex[entry.speaker] ?? 0;
                     const p = SPEAKER_PALETTE[n % SPEAKER_PALETTE.length];
                     return (
@@ -368,7 +372,7 @@ export default function CallDetailClient({
                       </div>
                     );
                   })}
-                  {(!call.transcript || call.transcript.length === 0) && (
+                  {transcript.length === 0 && (
                     <p className="text-center text-muted-foreground py-8">Nu există transcript</p>
                   )}
                 </div>
@@ -470,9 +474,9 @@ export default function CallDetailClient({
                 {call.criticalFailureReason && (
                   <p className="text-sm text-destructive">{call.criticalFailureReason}</p>
                 )}
-                {call.rulesFailed.length > 0 && (
+                {rulesFailed.length > 0 && (
                   <ul className="space-y-2 mt-2">
-                    {call.rulesFailed.map((rule, idx) => (
+                    {rulesFailed.map((rule, idx) => (
                       <li key={idx} className="text-sm flex items-center gap-2">
                         <XCircle className="h-4 w-4 text-destructive" />
                         {rule}
