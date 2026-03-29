@@ -41,7 +41,7 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
 
     # Log start
     _add_log(db, "info", f"Reanalysis started for {call_label}")
-    await manager.broadcast({"type": "log", "data": {
+    await manager.broadcast("log", {"data": {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Reanalysis started for {call_label}",
     }})
@@ -74,7 +74,7 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     ]
 
     _add_log(db, "info", f"Sending {call_label} to AI with {len(rules)} rules")
-    await manager.broadcast({"type": "log", "data": {
+    await manager.broadcast("log", {"data": {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Sending {call_label} to AI with {len(rules)} rules",
     }})
@@ -89,7 +89,7 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         result = await llm.analyze_call(transcript, rules_data, main_prompt=prompt)
     except Exception as e:
         _add_log(db, "error", f"Reanalysis failed for {call_label}: {e}")
-        await manager.broadcast({"type": "log", "data": {
+        await manager.broadcast("log", {"data": {
             "timestamp": utcnow().isoformat(), "level": "error",
             "source": "analysis", "message": f"Reanalysis failed for {call_label}: {e}",
         }})
@@ -121,7 +121,7 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
 
     # Log completion
     _add_log(db, "info", f"Reanalysis complete for {call_label}: {result.grade} ({result.overallScore}%)")
-    await manager.broadcast({"type": "log", "data": {
+    await manager.broadcast("log", {"data": {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Reanalysis complete for {call_label}: {result.grade} ({result.overallScore}%)",
     }})
