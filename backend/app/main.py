@@ -41,25 +41,35 @@ def _cleanup_orphaned_runs():
 
 
 def _ensure_admin():
-    """Create default admin user on first run if no users exist."""
+    """Create or update the default admin user from env vars."""
     import os
     from app.database import SessionLocal
     from app.models.user import User
-    from app.auth import hash_password
+    from app.auth import hash_password, verify_password
+
+    username = os.getenv("DEFAULT_ADMIN_USER", "admin")
+    email = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@callqa.local")
+    password = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin")
 
     db = SessionLocal()
     try:
-        if db.query(User).count() == 0:
+        admin = db.query(User).filter(User.username == username).first()
+        if not admin:
             admin = User(
-                username=os.getenv("DEFAULT_ADMIN_USER", "admin"),
-                email=os.getenv("DEFAULT_ADMIN_EMAIL", "admin@callqa.local"),
-                hashed_password=hash_password(os.getenv("DEFAULT_ADMIN_PASSWORD", "admin")),
+                username=username,
+                email=email,
+                hashed_password=hash_password(password),
                 full_name="System Administrator",
                 role="admin",
             )
             db.add(admin)
             db.commit()
-            logger.info(f"Default admin user created: {admin.username}")
+            logger.info(f"Admin user created: {username}")
+        elif not verify_password(password, admin.hashed_password):
+            admin.hashed_password = hash_password(password)
+            admin.email = email
+            db.commit()
+            logger.info(f"Admin password synced from env")
     finally:
         db.close()
 
