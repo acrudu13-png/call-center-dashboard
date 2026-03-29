@@ -24,6 +24,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [loading, user, isPublicPage, router]);
 
+  // Redirect to dashboard after login
+  useEffect(() => {
+    if (!loading && user && isPublicPage) {
+      router.replace("/");
+    }
+  }, [loading, user, isPublicPage, router]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
