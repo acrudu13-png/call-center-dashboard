@@ -1,16 +1,29 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import get_db, utcnow
 from app.models.call import Call, TranscriptLine, ScorecardEntry
+from app.models.job import LogEntry
 from app.models.rule import QARule
 from app.schemas.call import AnalyzeRequest, AnalyzeResponse
 from app.schemas.setting import LlmSettings, MainPrompt
 from app.services.llm_service import LLMService
 from app.services.settings_service import get_setting as _get_setting
 from app.auth import get_current_user
+from app.ws_manager import manager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/analyze", tags=["analysis"], dependencies=[Depends(get_current_user)])
+
+
+def _add_log(db, level: str, message: str):
+    entry = LogEntry(timestamp=utcnow(), level=level, source="analysis", message=message)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry
 
 
 @router.post("", response_model=AnalyzeResponse)
@@ -20,13 +33,23 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     if not llm_settings.openRouterApiKey:
         raise HTTPException(status_code=400, detail="OpenRouter API key not configured")
 
+    # Resolve call
+    call = db.query(Call).filter(
+        (Call.id == payload.callId) | (Call.call_id == payload.callId)
+    ).first()
+    call_label = call.call_id if call else payload.callId
+
+    # Log start
+    _add_log(db, "info", f"Reanalysis started for {call_label}")
+    await manager.broadcast({"type": "log", "data": {
+        "timestamp": utcnow().isoformat(), "level": "info",
+        "source": "analysis", "message": f"Reanalysis started for {call_label}",
+    }})
+
     # Get transcript
     if payload.transcript:
         transcript = [t.model_dump() for t in payload.transcript]
     else:
-        call = db.query(Call).filter(
-            (Call.id == payload.callId) | (Call.call_id == payload.callId)
-        ).first()
         if not call:
             raise HTTPException(status_code=404, detail="Call not found")
         transcript = [
@@ -50,18 +73,29 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         for r in rules
     ]
 
+    _add_log(db, "info", f"Sending {call_label} to AI with {len(rules)} rules")
+    await manager.broadcast({"type": "log", "data": {
+        "timestamp": utcnow().isoformat(), "level": "info",
+        "source": "analysis", "message": f"Sending {call_label} to AI with {len(rules)} rules",
+    }})
+
     # Get prompt
     main_prompt_setting = _get_setting(db, "main_prompt", MainPrompt)
     prompt = payload.mainPrompt or main_prompt_setting.prompt or None
 
     # Run analysis
-    llm = LLMService(llm_settings)
-    result = await llm.analyze_call(transcript, rules_data, main_prompt=prompt)
+    try:
+        llm = LLMService(llm_settings)
+        result = await llm.analyze_call(transcript, rules_data, main_prompt=prompt)
+    except Exception as e:
+        _add_log(db, "error", f"Reanalysis failed for {call_label}: {e}")
+        await manager.broadcast({"type": "log", "data": {
+            "timestamp": utcnow().isoformat(), "level": "error",
+            "source": "analysis", "message": f"Reanalysis failed for {call_label}: {e}",
+        }})
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
 
     # Save results to the call record
-    call = db.query(Call).filter(
-        (Call.id == payload.callId) | (Call.call_id == payload.callId)
-    ).first()
     if call:
         call.qa_score = result.overallScore
         call.ai_summary = result.summary
@@ -84,5 +118,12 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
                 details=r.details, extracted_value=r.extractedValue,
             ))
         db.commit()
+
+    # Log completion
+    _add_log(db, "info", f"Reanalysis complete for {call_label}: {result.grade} ({result.overallScore}%)")
+    await manager.broadcast({"type": "log", "data": {
+        "timestamp": utcnow().isoformat(), "level": "info",
+        "source": "analysis", "message": f"Reanalysis complete for {call_label}: {result.grade} ({result.overallScore}%)",
+    }})
 
     return result
