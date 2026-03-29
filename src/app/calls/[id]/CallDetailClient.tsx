@@ -489,6 +489,59 @@ export default function CallDetailClient({
           )}
         </div>
       </div>
+
+      {/* LLM Debug Panel */}
+      {(call.llmRequest || call.llmResponse) && (
+        <LlmDebugPanel request={call.llmRequest} response={call.llmResponse} />
+      )}
     </div>
+  );
+}
+
+function LlmDebugPanel({ request, response }: { request?: string | null; response?: string | null }) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"request" | "response">("request");
+
+  if (!request && !response) return null;
+
+  return (
+    <Card className="border-dashed border-muted-foreground/30">
+      <CardHeader className="pb-2 cursor-pointer" onClick={() => setOpen(!open)}>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Brain className="h-4 w-4" />
+            LLM Debug
+          </CardTitle>
+          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
+            {open ? "Collapse" : "Expand"}
+          </Button>
+        </div>
+      </CardHeader>
+      {open && (
+        <CardContent>
+          <div className="flex gap-2 mb-3">
+            <Button
+              variant={tab === "request" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTab("request")}
+            >
+              Request ({request ? Math.round(request.length / 1024) : 0} KB)
+            </Button>
+            <Button
+              variant={tab === "response" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTab("response")}
+            >
+              Response ({response ? Math.round(response.length / 1024) : 0} KB)
+            </Button>
+          </div>
+          <ScrollArea className="h-[500px]">
+            <pre className="text-xs font-mono whitespace-pre-wrap break-all bg-muted p-4 rounded-lg">
+              {tab === "request" ? (request || "No request data") : (response || "No response data")}
+            </pre>
+          </ScrollArea>
+        </CardContent>
+      )}
+    </Card>
   );
 }

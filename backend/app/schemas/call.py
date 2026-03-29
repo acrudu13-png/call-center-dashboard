@@ -49,6 +49,8 @@ class CallDetail(CallSummary):
     hasCriticalFailure: bool = False
     criticalFailureReason: Optional[str] = None
     rawJson: dict = {}
+    llmRequest: Optional[str] = None
+    llmResponse: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -79,3 +81,5 @@ class AnalyzeResponse(BaseModel):
     results: list[ScorecardEntrySchema]
     hasCriticalFailure: bool
     criticalFailureReason: Optional[str] = None
+    llmRequest: Optional[str] = None
+    llmResponse: Optional[str] = None

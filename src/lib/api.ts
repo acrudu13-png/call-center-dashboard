@@ -87,6 +87,8 @@ export interface CallDetail extends CallSummary {
   hasCriticalFailure: boolean;
   criticalFailureReason?: string;
   rawJson: Record<string, unknown>;
+  llmRequest?: string | null;
+  llmResponse?: string | null;
 }
 
 export async function fetchCalls(params: {

@@ -108,6 +108,8 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         call.rules_failed = [r.ruleId for r in result.results if not r.passed]
         call.compliance_pass = not result.hasCriticalFailure
         call.status = "flagged" if result.hasCriticalFailure else "completed"
+        call.llm_request = result.llmRequest
+        call.llm_response = result.llmResponse
 
         # Replace scorecard entries
         db.query(ScorecardEntry).filter(ScorecardEntry.call_id == call.id).delete()

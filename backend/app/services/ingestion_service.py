@@ -596,6 +596,8 @@ class IngestionService:
         call.rules_failed = [r.ruleId for r in analysis.results if not r.passed]
         call.compliance_pass = not analysis.hasCriticalFailure
         call.status = "flagged" if analysis.hasCriticalFailure else "completed"
+        call.llm_request = analysis.llmRequest
+        call.llm_response = analysis.llmResponse
 
         for r in analysis.results:
             db.add(ScorecardEntry(

@@ -35,6 +35,8 @@ class Call(Base):
     ai_total_possible: Mapped[float | None] = mapped_column(Float, nullable=True)
     has_critical_failure: Mapped[bool] = mapped_column(Boolean, default=False)
     critical_failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    llm_request: Mapped[str | None] = mapped_column(Text, nullable=True)
+    llm_response: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

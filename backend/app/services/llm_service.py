@@ -256,6 +256,10 @@ class LLMService:
                     "extractedValue": None,
                 })
 
+        # Store the full request/response for debugging
+        debug_request = messages[1]["content"]
+        debug_response = content
+
         return AnalyzeResponse(
             summary=result["summary"],
             improvementAdvice=result.get("improvementAdvice", [])[:4],
@@ -277,4 +281,6 @@ class LLMService:
             ],
             hasCriticalFailure=result["hasCriticalFailure"],
             criticalFailureReason=result.get("criticalFailureReason"),
+            llmRequest=debug_request,
+            llmResponse=debug_response,
         )

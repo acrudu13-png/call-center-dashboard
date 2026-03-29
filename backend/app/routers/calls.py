@@ -343,6 +343,8 @@ def get_call(call_id: str, db: Session = Depends(get_db)):
         hasCriticalFailure=call.has_critical_failure,
         criticalFailureReason=call.critical_failure_reason,
         rawJson=call.raw_json or {},
+        llmRequest=call.llm_request,
+        llmResponse=call.llm_response,
     )
 
 
