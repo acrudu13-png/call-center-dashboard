@@ -123,13 +123,16 @@ class LLMService:
             for seg in transcript
         )
 
+        total_max = sum(r["max_score"] for r in rules)
+
         messages = [
             {"role": "system", "content": prompt},
             {
                 "role": "user",
                 "content": (
-                    f"REGULI DE EVALUARE ({len(rules)} reguli):\n{rules_text}\n\n"
+                    f"REGULI DE EVALUARE ({len(rules)} reguli, totalPossible={total_max}):\n{rules_text}\n\n"
                     f"ORDINEA EXACTĂ a results (trebuie {len(rules)} elemente):\n{results_template}\n\n"
+                    f"IMPORTANT: totalPossible TREBUIE să fie exact {total_max}. overallScore = (totalEarned / {total_max}) * 100.\n\n"
                     f"TRANSCRIPT:\n{transcript_text}"
                 ),
             },
@@ -244,7 +247,6 @@ class LLMService:
             if r["rule_id"] in result_map:
                 ordered_results.append(result_map[r["rule_id"]])
             else:
-                # LLM missed this rule — add a default entry
                 logger.warning(f"LLM missed rule {r['rule_id']}, adding default")
                 ordered_results.append({
                     "ruleId": r["rule_id"],
