@@ -36,7 +36,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Slider } from "@/components/ui/slider";
-import { fetchCall, getAudioUrl, type CallDetail } from "@/lib/api";
+import { fetchCall, getAudioUrl, analyzeCall, type CallDetail } from "@/lib/api";
+import { RotateCcw } from "lucide-react";
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -79,6 +80,7 @@ export default function CallDetailClient({
   const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioDuration, setAudioDuration] = useState(0);
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -147,15 +149,18 @@ export default function CallDetailClient({
     }
   };
 
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
-  }, []);
+  const handleReanalyze = async () => {
+    setReanalyzing(true);
+    try {
+      await analyzeCall({ callId: id });
+      const updated = await fetchCall(id);
+      setCall(updated);
+    } catch (e) {
+      console.error("Reanalysis failed:", e);
+    } finally {
+      setReanalyzing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -218,6 +223,10 @@ export default function CallDetailClient({
           <p className="text-muted-foreground">ID: {call.callId}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleReanalyze} disabled={reanalyzing}>
+            {reanalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
+            {reanalyzing ? "Analyzing..." : "Reanalyze"}
+          </Button>
           <GradeBadge grade={grade} />
           <Badge variant={call.status === "completed" ? "default" : call.status === "flagged" ? "destructive" : "secondary"}>
             {call.status}

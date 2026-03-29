@@ -125,12 +125,27 @@ export default function RulesEnginePage() {
     }
   };
 
-  const toggleEnabled = (ruleId: string) => {
+  const toggleEnabled = async (ruleId: string) => {
+    const rule = rules.find((r) => r.id === ruleId);
+    if (!rule) return;
+    const newEnabled = !rule.enabled;
+    // Optimistic update
     setRules((prev) =>
       prev.map((r) =>
-        r.id === ruleId ? { ...r, enabled: !r.enabled } : r
+        r.id === ruleId ? { ...r, enabled: newEnabled } : r
       )
     );
+    // Persist to backend
+    try {
+      await saveQARule({ ...rule, enabled: newEnabled });
+    } catch {
+      // Revert on failure
+      setRules((prev) =>
+        prev.map((r) =>
+          r.id === ruleId ? { ...r, enabled: !newEnabled } : r
+        )
+      );
+    }
   };
 
   const moveRule = (index: number, direction: "up" | "down") => {
