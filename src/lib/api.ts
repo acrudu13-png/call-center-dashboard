@@ -87,6 +87,7 @@ export interface CallDetail extends CallSummary {
   hasCriticalFailure: boolean;
   criticalFailureReason?: string;
   rawJson: Record<string, unknown>;
+  processedAt?: string | null;
   llmRequest?: string | null;
   llmResponse?: string | null;
 }

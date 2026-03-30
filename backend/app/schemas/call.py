@@ -49,6 +49,7 @@ class CallDetail(CallSummary):
     hasCriticalFailure: bool = False
     criticalFailureReason: Optional[str] = None
     rawJson: dict = {}
+    processedAt: Optional[str] = None
     llmRequest: Optional[str] = None
     llmResponse: Optional[str] = None
 

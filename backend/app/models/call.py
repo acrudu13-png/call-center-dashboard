@@ -37,6 +37,7 @@ class Call(Base):
     critical_failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     llm_request: Mapped[str | None] = mapped_column(Text, nullable=True)
     llm_response: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

@@ -250,6 +250,11 @@ export default function CallDetailClient({
               </CardTitle>
               <CardDescription>
                 {new Date(call.dateTime).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" })} • {formatTime(call.duration)}
+                {call.processedAt && (
+                  <span className="ml-3 text-muted-foreground">
+                    Procesat: {new Date(call.processedAt).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" })}
+                  </span>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

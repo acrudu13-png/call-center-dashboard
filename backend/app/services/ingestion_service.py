@@ -7,7 +7,7 @@ import os
 import threading
 import uuid
 import logging
-from app.database import utcnow
+from app.database import utcnow, APP_TZ
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -547,10 +547,25 @@ class IngestionService:
         # Prefer .info duration if available, fall back to transcript
         duration = meta["duration"] if meta["duration"] > 0 else transcript_duration
 
+        # Parse actual call datetime from filename: ..._2026-03-29_14-50-44.au
+        import re as _re
+        call_dt = utcnow()
+        dt_match = _re.search(r'(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})\.\w+$', os.path.basename(file_path))
+        if dt_match:
+            try:
+                from datetime import datetime as _dt
+                call_dt = _dt.strptime(
+                    f"{dt_match.group(1)} {dt_match.group(2).replace('-', ':')}",
+                    "%Y-%m-%d %H:%M:%S"
+                ).replace(tzinfo=APP_TZ)
+            except ValueError:
+                pass
+
         call_count = db.query(Call).count()
         call = Call(
             call_id=f"CALL-{1000 + call_count}",
-            date_time=utcnow(),
+            date_time=call_dt,
+            processed_at=utcnow(),
             agent_name=meta["agent_name"],
             agent_id=meta["agent_id"],
             customer_phone=meta["customer_phone"],
