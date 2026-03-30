@@ -84,7 +84,7 @@ export default function IngestionSettingsPage() {
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [manualChecking, setManualChecking] = useState(false);
   const [manualCheckResult, setManualCheckResult] = useState<string | null>(null);
-  const [customPath, setCustomPath] = useState("");
+  const [customPath, setCustomPath] = useState<string | null>(null);
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -150,7 +150,7 @@ export default function IngestionSettingsPage() {
   const handleManualCheck = async () => {
     setManualChecking(true);
     setManualCheckResult(null);
-    const targetPath = customPath || sftp.remotePath;
+    const targetPath = customPath ?? resolvedPath;
     const result = await triggerManualIngestionCheck(targetPath);
     setManualCheckResult(result.message);
     setManualChecking(false);
@@ -599,9 +599,8 @@ export default function IngestionSettingsPage() {
                 <div className="space-y-1.5">
                   <Label>Remote Path for Check</Label>
                   <Input
-                    value={customPath}
+                    value={customPath ?? resolvedPath}
                     onChange={(e) => setCustomPath(e.target.value)}
-                    placeholder={resolvedPath}
                     className="font-mono text-sm"
                   />
                   <p className="text-xs text-muted-foreground">
