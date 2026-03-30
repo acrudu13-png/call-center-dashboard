@@ -62,7 +62,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col border-r bg-card transition-all duration-300 h-screen sticky top-0",
+        "flex flex-col border-r bg-card transition-all duration-200 h-screen sticky top-0 overflow-hidden",
         collapsed ? "w-16" : "w-64"
       )}
     >
@@ -89,7 +89,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap overflow-hidden",
                 isActive
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -131,7 +131,7 @@ export function Sidebar() {
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start gap-2 px-3"
+            className="w-full justify-start gap-2 px-3 whitespace-nowrap overflow-hidden"
             onClick={toggleLocale}
           >
             <Languages className="h-4 w-4 shrink-0" />
@@ -155,7 +155,7 @@ export function Sidebar() {
               </TooltipContent>
             </Tooltip>
           ) : (
-            <div className="flex items-center gap-2 px-2">
+            <div className="flex items-center gap-2 px-2 whitespace-nowrap overflow-hidden">
               <div className="rounded-full bg-primary/10 p-1.5">
                 <User className="h-3.5 w-3.5 text-primary" />
               </div>
