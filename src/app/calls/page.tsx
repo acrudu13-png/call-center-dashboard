@@ -349,14 +349,15 @@ export default function CallsExplorerPage() {
                   <TableCell className="font-mono text-sm">{call.customerPhone}</TableCell>
                   <TableCell>{formatDuration(call.duration)}</TableCell>
                   <TableCell>
-                    <Badge variant={call.qaScore >= 85 ? "default" : call.qaScore >= 70 ? "secondary" : "destructive"}>
-                      {Math.round(call.qaScore)}%
-                    </Badge>
+                    {!call.isEligible ? (
+                      <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300">N/A</Badge>
+                    ) : (
+                      <Badge variant={call.qaScore >= 85 ? "default" : call.qaScore >= 70 ? "secondary" : "destructive"}>
+                        {Math.round(call.qaScore)}%
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell>
-                    {!call.isEligible && (
-                      <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300 mr-1">N/A</Badge>
-                    )}
                     <Badge variant={call.status === "completed" ? "default" : call.status === "flagged" ? "destructive" : "secondary"}>
                       {call.status}
                     </Badge>
