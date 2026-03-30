@@ -395,9 +395,10 @@ class IngestionService:
         """Process all files in parallel. Skips already-completed ones."""
         from app.database import SessionLocal
 
-        # Load concurrency from settings
+        # Load settings
         schedule = _get_setting(self.db, "ingest-schedule", IngestSchedule)
         concurrency = max(1, schedule.concurrency)
+        min_duration = schedule.minDuration
 
         run.status = "processing"
         run.total_files = len(files)
@@ -462,7 +463,7 @@ class IngestionService:
                 db = SessionLocal()
                 try:
                     call_id = await self._process_file_with_session(
-                        db, file_path, job_id, source, settings, run.run_id, all_rules_data
+                        db, file_path, job_id, source, settings, run.run_id, all_rules_data, min_duration
                     )
                     async with lock:
                         created_ids.append(call_id)
@@ -516,6 +517,7 @@ class IngestionService:
     async def _process_file_with_session(
         self, db: Session, file_path: str, job_id: str,
         source: str, settings, run_id: str, rules_data: list[dict],
+        min_duration: int = 10,
     ) -> str:
         filename = os.path.basename(file_path)
         log = lambda lvl, msg: _log(db, lvl, "ingestion", msg, job_id)
@@ -619,48 +621,58 @@ class IngestionService:
             ))
         db.commit()
 
-        # 5. LLM analysis — filter rules by call direction
-        call_dir = call.direction or "unknown"
-        filtered_rules = [
-            r for r in rules_data
-            if r["direction"] == "both" or r["direction"] == call_dir
-        ]
-        log("info", f"Analyzing {call.call_id} ({call_dir}), {len(filtered_rules)}/{len(rules_data)} rules...")
-        job.progress = 70
-        db.commit()
-        _broadcast_job(job)
+        # 5. Check minimum duration — skip LLM for very short calls
+        if duration < min_duration:
+            log("info", f"Skipping analysis for {call.call_id} — duration {duration}s < minimum {min_duration}s")
+            call.qa_score = 0
+            call.ai_summary = f"Apelul este prea scurt pentru analiza ({duration}s < {min_duration}s minim)."
+            call.ai_grade = "Slab"
+            call.status = "completed"
+            call.is_eligible = False
+            call.ineligible_reason = f"Durata prea scurta ({duration}s)"
+        else:
+            # 5b. LLM analysis — filter rules by call direction
+            call_dir = call.direction or "unknown"
+            filtered_rules = [
+                r for r in rules_data
+                if r["direction"] == "both" or r["direction"] == call_dir
+            ]
+            log("info", f"Analyzing {call.call_id} ({call_dir}), {len(filtered_rules)}/{len(rules_data)} rules...")
+            job.progress = 70
+            db.commit()
+            _broadcast_job(job)
 
-        llm = LLMService(settings.llm)
-        analysis = await llm.analyze_call(
-            segments, filtered_rules,
-            agent_name=call.agent_name,
-            log_fn=lambda lvl, src, msg, jid: _log(db, lvl, src, msg, jid),
-            job_id=job_id,
-        )
+            llm = LLMService(settings.llm)
+            analysis = await llm.analyze_call(
+                segments, filtered_rules,
+                agent_name=call.agent_name,
+                log_fn=lambda lvl, src, msg, jid: _log(db, lvl, src, msg, jid),
+                job_id=job_id,
+            )
 
-        # 6. Save analysis
-        call.qa_score = analysis.overallScore
-        call.ai_summary = analysis.summary
-        call.ai_grade = analysis.grade
-        call.ai_improvement_advice = analysis.improvementAdvice
-        call.ai_total_earned = analysis.totalEarned
-        call.ai_total_possible = analysis.totalPossible
-        call.has_critical_failure = analysis.hasCriticalFailure
-        call.critical_failure_reason = analysis.criticalFailureReason
-        call.rules_failed = [r.ruleId for r in analysis.results if not r.passed]
-        call.compliance_pass = not analysis.hasCriticalFailure
-        call.status = "flagged" if analysis.hasCriticalFailure else "completed"
-        call.is_eligible = analysis.isEligible
-        call.ineligible_reason = analysis.ineligibleReason
-        call.llm_request = analysis.llmRequest
-        call.llm_response = analysis.llmResponse
+            # 6. Save analysis
+            call.qa_score = analysis.overallScore
+            call.ai_summary = analysis.summary
+            call.ai_grade = analysis.grade
+            call.ai_improvement_advice = analysis.improvementAdvice
+            call.ai_total_earned = analysis.totalEarned
+            call.ai_total_possible = analysis.totalPossible
+            call.has_critical_failure = analysis.hasCriticalFailure
+            call.critical_failure_reason = analysis.criticalFailureReason
+            call.rules_failed = [r.ruleId for r in analysis.results if not r.passed]
+            call.compliance_pass = not analysis.hasCriticalFailure
+            call.status = "flagged" if analysis.hasCriticalFailure else "completed"
+            call.is_eligible = analysis.isEligible
+            call.ineligible_reason = analysis.ineligibleReason
+            call.llm_request = analysis.llmRequest
+            call.llm_response = analysis.llmResponse
 
-        for r in analysis.results:
-            db.add(ScorecardEntry(
-                call_id=call.id, rule_id=r.ruleId, rule_title=r.ruleTitle,
-                passed=r.passed, score=r.score, max_score=r.maxScore,
-                details=r.details, extracted_value=r.extractedValue,
-            ))
+            for r in analysis.results:
+                db.add(ScorecardEntry(
+                    call_id=call.id, rule_id=r.ruleId, rule_title=r.ruleTitle,
+                    passed=r.passed, score=r.score, max_score=r.maxScore,
+                    details=r.details, extracted_value=r.extractedValue,
+                ))
 
         # 7. Mark job complete
         job.status = "completed"

@@ -45,6 +45,7 @@ class IngestSchedule(BaseModel):
     cronHour: int = 6
     enabled: bool = True
     concurrency: int = 5
+    minDuration: int = 10  # seconds — calls shorter than this skip LLM analysis
 
 
 class MetadataMapping(BaseModel):

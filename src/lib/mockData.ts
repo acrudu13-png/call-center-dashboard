@@ -725,6 +725,7 @@ export const defaultIngestSchedule = {
   cronHour: 6,   // 06:00 daily
   enabled: true,
   concurrency: 5,
+  minDuration: 10,
 };
 
 export const defaultLlmSettings = {

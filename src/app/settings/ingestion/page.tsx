@@ -569,6 +569,32 @@ export default function IngestionSettingsPage() {
                   </p>
                 </div>
 
+                <div className="space-y-1.5">
+                  <Label htmlFor="minDuration">Minimum call duration (seconds)</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      id="minDuration"
+                      type="number"
+                      min={0}
+                      max={300}
+                      value={schedule.minDuration ?? 10}
+                      onChange={(e) =>
+                        setSchedule({
+                          ...schedule,
+                          minDuration: Math.min(300, Math.max(0, Number(e.target.value))),
+                        })
+                      }
+                      className="w-24 font-mono"
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      seconds
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Calls shorter than this will be skipped from AI analysis and marked as ineligible. Set to 0 to analyze all.
+                  </p>
+                </div>
+
                 {schedule.enabled && (
                   <div className="flex items-center gap-2 text-sm bg-muted rounded-lg px-4 py-3">
                     <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
