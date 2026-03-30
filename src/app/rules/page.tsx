@@ -71,6 +71,7 @@ export default function RulesEnginePage() {
         maxScore: r.max_score > 0 ? r.max_score : undefined,
         extractionKey: r.rule_type === "extraction" ? r.rule_id : undefined,
         enabled: r.enabled,
+        isCritical: r.is_critical,
         direction: r.direction || "both",
         order: r.sort_order,
       })));
@@ -96,6 +97,7 @@ export default function RulesEnginePage() {
     sectionEn: "",
     maxScore: 5,
     enabled: true,
+    isCritical: false,
     direction: "both",
     order: rules.length + 1,
   };
@@ -364,6 +366,16 @@ export default function RulesEnginePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Switch
+                    checked={editingRule.isCritical || false}
+                    onCheckedChange={(v) =>
+                      setEditingRule({ ...editingRule, isCritical: v })
+                    }
+                  />
+                  <Label>Regula critica</Label>
+                  <span className="text-xs text-muted-foreground">(esecul afecteaza conformitatea)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
                     checked={editingRule.enabled}
                     onCheckedChange={(v) =>
                       setEditingRule({ ...editingRule, enabled: v })
@@ -506,6 +518,9 @@ export default function RulesEnginePage() {
                               <Badge variant="outline" className="text-xs">
                                 {rule.direction === "inbound" ? "IN" : "OUT"}
                               </Badge>
+                            )}
+                            {rule.isCritical && (
+                              <Badge variant="destructive" className="text-xs">CRITICAL</Badge>
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground">

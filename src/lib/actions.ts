@@ -106,6 +106,7 @@ export async function saveQARule(rule: {
   maxScore?: number;
   extractionKey?: string;
   enabled: boolean;
+  isCritical?: boolean;
   direction?: string;
 }) {
   if (rule.id) {
@@ -115,6 +116,7 @@ export async function saveQARule(rule: {
       section: rule.section || "General",
       max_score: rule.maxScore || 0,
       enabled: rule.enabled,
+      is_critical: rule.isCritical || false,
       direction: rule.direction || "both",
     });
     return { success: true, message: "Rule saved successfully.", id: rule.id };
@@ -128,7 +130,7 @@ export async function saveQARule(rule: {
       rule_type: rule.extractionKey ? "extraction" : "scoring",
       max_score: rule.maxScore || 0,
       enabled: rule.enabled,
-      is_critical: false,
+      is_critical: rule.isCritical || false,
       direction: rule.direction || "both",
     });
     return { success: true, message: "Rule saved successfully.", id };
