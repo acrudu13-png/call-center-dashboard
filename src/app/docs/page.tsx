@@ -1,15 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useAuth } from "@/lib/auth";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   BookOpen,
@@ -27,16 +22,12 @@ import {
   Activity,
   Database,
   Webhook,
-  Shield,
   Tag,
   ListChecks,
   PhoneIncoming,
-  PhoneOutgoing,
   RotateCcw,
   Trash2,
   Languages,
-  User,
-  Wrench,
 } from "lucide-react";
 
 function H2({ children }: { children: React.ReactNode }) {
@@ -58,7 +49,6 @@ function Section({ children }: { children: React.ReactNode }) {
 export default function DocsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  const [tab, setTab] = useState<"user" | "technical">("user");
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -67,32 +57,12 @@ export default function DocsPage() {
           <BookOpen className="h-7 w-7 text-primary" />
           <h1 className="text-3xl font-bold tracking-tight">Documentatie</h1>
         </div>
-        <P>CallQA Dashboard — ghid de utilizare si referinta tehnica.</P>
-      </div>
-
-      {/* Tab switcher */}
-      <div className="flex gap-2">
-        <Button
-          variant={tab === "user" ? "default" : "outline"}
-          onClick={() => setTab("user")}
-          className="gap-2"
-        >
-          <User className="h-4 w-4" /> Ghid utilizator
-        </Button>
-        {isAdmin && (
-          <Button
-            variant={tab === "technical" ? "default" : "outline"}
-            onClick={() => setTab("technical")}
-            className="gap-2"
-          >
-            <Wrench className="h-4 w-4" /> Documentatie tehnica
-          </Button>
-        )}
+        <P>CallQA Dashboard — ghid de utilizare.</P>
       </div>
 
       <Separator />
 
-      {tab === "user" ? <UserGuide /> : isAdmin ? <TechnicalGuide /> : <UserGuide />}
+      <UserGuide />
     </div>
   );
 }
@@ -332,192 +302,3 @@ function UserGuide() {
   );
 }
 
-/* ═══════════════════════════════════════════════════════
-   TECHNICAL GUIDE
-   ═══════════════════════════════════════════════════════ */
-
-function TechnicalGuide() {
-  return (
-    <div className="space-y-8">
-
-      {/* Architecture */}
-      <Section>
-        <H2>Arhitectura</H2>
-        <P>Sistem compus din 3 containere Docker:</P>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { name: "Frontend", tech: "Next.js 15, React 19", desc: "Port configurabil via .env" },
-            { name: "Backend", tech: "FastAPI, Python 3.12", desc: "Port configurabil via .env" },
-            { name: "Database", tech: "PostgreSQL 16", desc: "Port 5432" },
-          ].map(({ name, tech, desc }) => (
-            <Card key={name} className="bg-muted/40">
-              <CardContent className="pt-4 pb-3">
-                <p className="font-semibold text-sm">{name}</p>
-                <p className="text-xs text-muted-foreground">{tech}</p>
-                <p className="text-xs text-muted-foreground">{desc}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </Section>
-
-      <Separator />
-
-      {/* Data Flow */}
-      <Section>
-        <H2>Flux de date</H2>
-        <P>Pipeline-ul de procesare a apelurilor:</P>
-        <div className="space-y-2">
-          {[
-            { step: "1", title: "Descarcare", desc: "Conectare la SFTP/S3, listare fisiere audio, descarcare in local." },
-            { step: "2", title: "Parsarea metadatelor", desc: "Extragere agent, telefon, durata, directie din fisierul .info." },
-            { step: "3", title: "Transcriere", desc: "Trimitere audio la Soniox. Rezultat: transcript cu diarizare (identificare vorbitori)." },
-            { step: "4", title: "Analiza AI", desc: "Trimitere transcript + reguli la LLM. Rezultat: scor per regula, rezumat, recomandari." },
-            { step: "5", title: "Stocare", desc: "Salvare rezultate in PostgreSQL. Trimitere webhook daca este configurat." },
-          ].map(({ step, title, desc }) => (
-            <div key={step} className="flex gap-3 p-3 rounded-lg border">
-              <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">{step}</div>
-              <div>
-                <p className="text-sm font-medium">{title}</p>
-                <P>{desc}</P>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <Separator />
-
-      {/* Database */}
-      <Section>
-        <H2>Schema bazei de date</H2>
-        <div className="space-y-2">
-          {[
-            { table: "calls", desc: "Apeluri cu metadate, scoruri AI, directie, eligibilitate, request/response LLM." },
-            { table: "transcript_lines", desc: "Linii de transcript (vorbitor, timestamp, text). FK catre calls.id cu cascade delete." },
-            { table: "scorecard_entries", desc: "Rezultate per regula (scor, passed, detalii). FK catre calls.id cu cascade delete." },
-            { table: "qa_rules", desc: "Reguli de evaluare cu directie (inbound/outbound/both), is_critical, enabled." },
-            { table: "ingestion_runs", desc: "Sesiuni de procesare (progres, status, fisiere)." },
-            { table: "transcription_jobs", desc: "Operatiuni de transcriere per fisier." },
-            { table: "log_entries", desc: "Jurnalul evenimentelor de procesare." },
-            { table: "settings", desc: "Configurari (SFTP, S3, LLM, Soniox, webhook) — valori sensibile criptate." },
-            { table: "users", desc: "Utilizatori cu roluri (admin/manager/viewer), parole bcrypt." },
-          ].map(({ table, desc }) => (
-            <div key={table} className="flex gap-3 p-2 rounded-lg border">
-              <Badge variant="outline" className="font-mono text-xs shrink-0">{table}</Badge>
-              <P>{desc}</P>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <Separator />
-
-      {/* Scoring */}
-      <Section>
-        <H2>Sistem de scorare</H2>
-        <P>Scorul general este un procentaj calculat de AI:</P>
-        <div className="bg-muted rounded-lg p-3 font-mono text-xs mt-1 mb-3">
-          overallScore = (totalEarned / totalPossible) x 100
-        </div>
-        <P>Doar regulile de scoring contribuie. Regulile de extractie nu au scor.</P>
-        <div className="flex flex-wrap gap-3 mt-3">
-          {[
-            { label: "Excelent", color: "bg-green-100 text-green-800 border-green-200", range: ">= 90%" },
-            { label: "Bun", color: "bg-blue-100 text-blue-800 border-blue-200", range: "75–89%" },
-            { label: "Acceptabil", color: "bg-yellow-100 text-yellow-800 border-yellow-200", range: "60–74%" },
-            { label: "Slab", color: "bg-red-100 text-red-800 border-red-200", range: "< 60%" },
-          ].map(({ label, color, range }) => (
-            <div key={label} className={`p-3 rounded-lg border flex-1 min-w-[120px] ${color}`}>
-              <p className="text-sm font-bold">{label}</p>
-              <p className="text-xs">{range}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 p-3 rounded-lg border border-red-200 bg-red-50">
-          <div className="flex items-center gap-2 mb-1">
-            <Shield className="h-4 w-4 text-red-600" />
-            <p className="text-sm font-bold text-red-800">Reguli critice</p>
-          </div>
-          <P>Daca o regula marcata ca &quot;critica&quot; esueaza, apelul este semnalat automat si conformitatea agentului scade.</P>
-        </div>
-        <div className="mt-3 p-3 rounded-lg border border-orange-200 bg-orange-50">
-          <p className="text-sm font-bold text-orange-800 mb-1">Apeluri neeligibile</p>
-          <P>AI determina automat daca apelul este eligibil (mesagerie vocala, prea scurt, fara interactiune reala). Apelurile neeligibile nu afecteaza statisticile.</P>
-        </div>
-      </Section>
-
-      <Separator />
-
-      {/* Security */}
-      <Section>
-        <H2>Securitate</H2>
-        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
-          <li><strong>Autentificare JWT</strong> — access token (1h) + refresh token (7 zile).</li>
-          <li><strong>Parole</strong> — hash bcrypt, minim 8 caractere, cel putin o litera mare si o cifra.</li>
-          <li><strong>Criptare setari</strong> — cheile API si parolele din setari sunt criptate AES-256 in baza de date.</li>
-          <li><strong>CORS</strong> — configurat doar pentru originile din .env.</li>
-          <li><strong>Toate endpoint-urile protejate</strong> — necesita Bearer token valid (exceptie: login, refresh).</li>
-        </ul>
-      </Section>
-
-      <Separator />
-
-      {/* Configuration */}
-      <Section>
-        <H2>Configurare (.env)</H2>
-        <P>Toate configurarile sunt centralizate in fisierul .env din radacina proiectului:</P>
-        <div className="space-y-1 mt-2">
-          {[
-            { key: "SERVER_HOST", desc: "IP-ul serverului" },
-            { key: "FRONTEND_PORT / BACKEND_PORT", desc: "Porturile serviciilor" },
-            { key: "JWT_SECRET_KEY", desc: "Cheia secreta pentru tokenuri JWT (obligatoriu)" },
-            { key: "ENCRYPTION_KEY", desc: "Cheia de criptare pentru setari sensibile (obligatoriu)" },
-            { key: "POSTGRES_*", desc: "Credentiale baza de date" },
-            { key: "OPENROUTER_API_KEY", desc: "Cheia API pentru analiza AI" },
-            { key: "SONIOX_API_KEY", desc: "Cheia API pentru transcriere" },
-            { key: "SFTP_* / S3_*", desc: "Credentiale sursa de inregistrari" },
-            { key: "TZ", desc: "Fusul orar (default: Europe/Bucharest)" },
-            { key: "INGEST_CRON_HOUR", desc: "Ora de ingestie zilnica automata" },
-          ].map(({ key, desc }) => (
-            <div key={key} className="flex gap-3 py-1">
-              <Badge variant="outline" className="font-mono text-xs shrink-0">{key}</Badge>
-              <span className="text-sm text-muted-foreground">{desc}</span>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <Separator />
-
-      {/* API Endpoints */}
-      <Section>
-        <H2>Endpoint-uri API</H2>
-        <div className="space-y-1 mt-2">
-          {[
-            { method: "POST", path: "/api/auth/login", desc: "Autentificare" },
-            { method: "POST", path: "/api/auth/refresh", desc: "Reinnoirea tokenului" },
-            { method: "GET", path: "/api/calls", desc: "Lista apeluri cu filtre si paginare" },
-            { method: "GET", path: "/api/calls/{id}", desc: "Detalii apel complet" },
-            { method: "GET", path: "/api/calls/stats", desc: "Statistici dashboard" },
-            { method: "GET", path: "/api/calls/agents/stats", desc: "Statistici per agent" },
-            { method: "GET", path: "/api/calls/export/csv", desc: "Export CSV" },
-            { method: "DELETE", path: "/api/calls/{id}", desc: "Stergere apel" },
-            { method: "POST", path: "/api/analyze", desc: "Analiza/reanaliza apel cu AI" },
-            { method: "GET", path: "/api/rules", desc: "Lista reguli QA" },
-            { method: "POST/PUT/DELETE", path: "/api/rules/*", desc: "CRUD reguli" },
-            { method: "POST", path: "/api/ingestion/trigger", desc: "Declansare ingestie manuala" },
-            { method: "GET", path: "/api/settings/{key}", desc: "Citire setari" },
-            { method: "PUT", path: "/api/settings/{key}", desc: "Salvare setari" },
-          ].map(({ method, path, desc }) => (
-            <div key={path + method} className="flex items-center gap-3 py-1">
-              <Badge variant="secondary" className="font-mono text-xs w-14 justify-center shrink-0">{method.split("/")[0]}</Badge>
-              <span className="font-mono text-xs text-muted-foreground">{path}</span>
-              <span className="text-xs text-muted-foreground ml-auto">{desc}</span>
-            </div>
-          ))}
-        </div>
-      </Section>
-    </div>
-  );
-}

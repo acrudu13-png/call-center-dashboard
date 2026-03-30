@@ -336,7 +336,7 @@ export default function UsersPage() {
               <Label>Rol</Label>
               <Select value={role} onValueChange={(v) => v && setRole(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectContent className="min-w-[350px]">
                   <SelectItem value="admin">Admin — acces complet + gestionare utilizatori</SelectItem>
                   <SelectItem value="manager">Manager — acces complet</SelectItem>
                   <SelectItem value="viewer">Viewer — doar vizualizare</SelectItem>
