@@ -1,155 +1,123 @@
 "use client";
 
+import { useState } from "react";
+import { useAuth } from "@/lib/auth";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
-  LayoutDashboard,
-  Phone,
-  ClipboardCheck,
-  Database,
-  Brain,
-  Webhook,
   BookOpen,
-  Layers,
-  GitBranch,
-  Tag,
+  Phone,
+  Users,
+  ClipboardCheck,
+  BarChart3,
   AlertTriangle,
   CheckCircle2,
-  FileAudio,
-  Cpu,
-  FolderOpen,
-  Settings,
-  User,
-  Wrench,
-  ArrowRight,
-  Lightbulb,
-  ListChecks,
-  BarChart3,
-  MessageSquare,
   Search,
   SlidersHorizontal,
-  History,
+  ArrowRight,
+  Brain,
+  FileDown,
+  Activity,
+  Database,
+  Webhook,
   Shield,
+  Tag,
+  ListChecks,
+  PhoneIncoming,
+  PhoneOutgoing,
+  RotateCcw,
+  Trash2,
+  Languages,
+  User,
+  Wrench,
 } from "lucide-react";
-
-function Section({ id, children }: { id: string; children: React.ReactNode }) {
-  return <section id={id} className="space-y-4">{children}</section>;
-}
 
 function H2({ children }: { children: React.ReactNode }) {
   return <h2 className="text-xl font-bold tracking-tight">{children}</h2>;
 }
 
 function H3({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-base font-semibold text-foreground">{children}</h3>;
+  return <h3 className="text-base font-semibold">{children}</h3>;
 }
 
-function P({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <p className={`text-sm text-muted-foreground leading-relaxed ${className ?? ""}`}>{children}</p>;
+function P({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm text-muted-foreground leading-relaxed">{children}</p>;
 }
 
-function Code({ children }: { children: React.ReactNode }) {
+function Section({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-3">{children}</div>;
+}
+
+export default function DocsPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [tab, setTab] = useState<"user" | "technical">("user");
+
   return (
-    <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded border">
-      {children}
-    </code>
-  );
-}
-
-function Step({ step, title, body }: { step: string; title: string; body: string }) {
-  return (
-    <div className="flex gap-4">
-      <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-        {step}
-      </div>
+    <div className="space-y-6 max-w-4xl">
       <div>
-        <H3>{title}</H3>
-        <P>{body}</P>
+        <div className="flex items-center gap-3 mb-2">
+          <BookOpen className="h-7 w-7 text-primary" />
+          <h1 className="text-3xl font-bold tracking-tight">Documentatie</h1>
+        </div>
+        <P>CallQA Dashboard — ghid de utilizare si referinta tehnica.</P>
       </div>
+
+      {/* Tab switcher */}
+      <div className="flex gap-2">
+        <Button
+          variant={tab === "user" ? "default" : "outline"}
+          onClick={() => setTab("user")}
+          className="gap-2"
+        >
+          <User className="h-4 w-4" /> Ghid utilizator
+        </Button>
+        {isAdmin && (
+          <Button
+            variant={tab === "technical" ? "default" : "outline"}
+            onClick={() => setTab("technical")}
+            className="gap-2"
+          >
+            <Wrench className="h-4 w-4" /> Documentatie tehnica
+          </Button>
+        )}
+      </div>
+
+      <Separator />
+
+      {tab === "user" ? <UserGuide /> : isAdmin ? <TechnicalGuide /> : <UserGuide />}
     </div>
   );
 }
 
-export default function DocsPage() {
+/* ═══════════════════════════════════════════════════════
+   USER GUIDE
+   ═══════════════════════════════════════════════════════ */
+
+function UserGuide() {
   return (
-    <div className="space-y-10 max-w-4xl">
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-3 mb-2">
-          <BookOpen className="h-7 w-7 text-primary" />
-          <h1 className="text-3xl font-bold tracking-tight">Documentation</h1>
+    <div className="space-y-8">
+
+      {/* Dashboard */}
+      <Section>
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-primary" />
+          <H2>Panou principal (Dashboard)</H2>
         </div>
-        <p className="text-muted-foreground">
-          CallQA Dashboard — user guide and technical reference.
-        </p>
-      </div>
-
-      <Separator />
-
-      {/* TOC */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Contents</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
-                <User className="h-3 w-3" /> User Guide
-              </p>
-              <ol className="space-y-1 text-sm text-muted-foreground list-decimal list-inside">
-                <li><a href="#dashboard" className="hover:text-foreground transition-colors">Dashboard Overview</a></li>
-                <li><a href="#calls-explorer" className="hover:text-foreground transition-colors">Calls Explorer</a></li>
-                <li><a href="#call-detail" className="hover:text-foreground transition-colors">Call Detail</a></li>
-                <li><a href="#rules-engine" className="hover:text-foreground transition-colors">QA Rules Engine</a></li>
-                <li><a href="#settings" className="hover:text-foreground transition-colors">Settings</a></li>
-              </ol>
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
-                <Wrench className="h-3 w-3" /> Technical Guide
-              </p>
-              <ol className="space-y-1 text-sm text-muted-foreground list-decimal list-inside" start={6}>
-                <li><a href="#architecture" className="hover:text-foreground transition-colors">Architecture</a></li>
-                <li><a href="#data-flow" className="hover:text-foreground transition-colors">Data Flow</a></li>
-                <li><a href="#qa-rules-system" className="hover:text-foreground transition-colors">QA Rules System</a></li>
-                <li><a href="#scoring" className="hover:text-foreground transition-colors">Scoring &amp; Grades</a></li>
-                <li><a href="#api-endpoint" className="hover:text-foreground transition-colors">API Endpoint</a></li>
-                <li><a href="#prompt-structure" className="hover:text-foreground transition-colors">Prompt Structure</a></li>
-                <li><a href="#production" className="hover:text-foreground transition-colors">Production Migration</a></li>
-                <li><a href="#codebase" className="hover:text-foreground transition-colors">Codebase Structure</a></li>
-              </ol>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ===== PART A: USER GUIDE ===== */}
-      <div className="flex items-center gap-2 mb-2">
-        <User className="h-5 w-5 text-primary" />
-        <h2 className="text-2xl font-bold tracking-tight">Part A: User Guide</h2>
-      </div>
-      <P>How to navigate and operate the CallQA Dashboard.</P>
-
-      <Separator />
-
-      {/* 1. Dashboard */}
-      <Section id="dashboard">
-        <H2>1. Dashboard Overview</H2>
-        <P>The dashboard (<Code>/</Code>) provides a quick summary of call center quality across the last 30 days.</P>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+        <P>Pagina principala afiseaza un sumar al calitatii apelurilor din centrul de apeluri.</P>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {[
-            { icon: Phone, label: "Total Calls", desc: "Total number of calls analyzed in the period" },
-            { icon: BarChart3, label: "Average Score", desc: "Mean QA percentage across all calls" },
-            { icon: AlertTriangle, label: "Critical Failures", desc: "Calls with compliance violations" },
-            { icon: CheckCircle2, label: "Pending Review", desc: "Calls awaiting supervisor action" },
+            { icon: Phone, label: "Total apeluri analizate", desc: "Numarul total de apeluri procesate de sistem." },
+            { icon: BarChart3, label: "Scor mediu calitate", desc: "Media scorurilor QA pentru toti agentii." },
+            { icon: AlertTriangle, label: "Esecuri critice", desc: "Apeluri care au esuat la reguli critice." },
+            { icon: CheckCircle2, label: "In asteptare revizie", desc: "Apeluri care necesita revizuirea supervizorului." },
           ].map(({ icon: Icon, label, desc }) => (
             <Card key={label} className="bg-muted/40">
               <CardContent className="pt-4 pb-3 flex items-center gap-3">
@@ -162,25 +130,24 @@ export default function DocsPage() {
             </Card>
           ))}
         </div>
-        <div className="space-y-2 mt-3">
-          <H3>Quality Score Trend</H3>
-          <P>A line chart shows the average QA score per day over the last 30 days. A declining trend may indicate an issue with a specific agent or a rule that needs adjustment.</P>
-          <H3>Flagged Calls Table</H3>
-          <P>Calls with critical compliance failures are listed here. Click any Call ID to open the full detail and see exactly which rules failed.</P>
-        </div>
+        <P>Tabelul de mai jos arata apelurile semnalate pentru revizie — apelurile cu probleme de conformitate.</P>
       </Section>
 
       <Separator />
 
-      {/* 2. Calls Explorer */}
-      <Section id="calls-explorer">
-        <H2>2. Calls Explorer</H2>
-        <P>The Calls page (<Code>/calls</Code>) is a searchable, filterable table of all processed calls.</P>
-        <div className="space-y-2 mt-2">
+      {/* Calls Explorer */}
+      <Section>
+        <div className="flex items-center gap-2">
+          <Phone className="h-5 w-5 text-primary" />
+          <H2>Apeluri (Calls Explorer)</H2>
+        </div>
+        <P>Pagina de apeluri permite navigarea, cautarea si filtrarea tuturor inregistrarilor procesate.</P>
+        <div className="space-y-2">
           {[
-            { icon: Search, title: "Search", desc: "Filter by Call ID, agent name, or phone number." },
-            { icon: SlidersHorizontal, title: "Filters", desc: "Advanced filters: date range, QA status (Passed/Average/Failed), score range, and specific failed rule." },
-            { icon: ArrowRight, title: "Sorting", desc: "Click column headers (Date, Agent, Duration, Score) to sort ascending/descending." },
+            { icon: Search, title: "Cautare", desc: "Filtreaza dupa ID apel, nume agent sau numar de telefon." },
+            { icon: SlidersHorizontal, title: "Filtre avansate", desc: "Filtreaza dupa status, agent, directie (inbound/outbound), scor minim/maxim, sesiune de ingestie." },
+            { icon: ArrowRight, title: "Sortare", desc: "Click pe antetul coloanelor (Data, Agent, Durata, Scor) pentru sortare." },
+            { icon: PhoneIncoming, title: "Directie", desc: "Fiecare apel arata directia: In (inbound - client suna) sau Out (outbound - agent suna)." },
           ].map(({ icon: Icon, title, desc }) => (
             <div key={title} className="flex items-start gap-3 p-3 rounded-lg border">
               <Icon className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -190,28 +157,204 @@ export default function DocsPage() {
               </div>
             </div>
           ))}
-          <P className="mt-2">Each row links to the Call Detail page. Pagination at the bottom (10, 25, or 50 per page).</P>
+        </div>
+        <P>Apelurile neeligibile (mesagerie vocala, prea scurte) sunt marcate cu <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300">N/A</Badge> si nu afecteaza statisticile.</P>
+      </Section>
+
+      <Separator />
+
+      {/* Call Detail */}
+      <Section>
+        <div className="flex items-center gap-2">
+          <Phone className="h-5 w-5 text-primary" />
+          <H2>Detalii apel</H2>
+        </div>
+        <P>Click pe un apel pentru a vedea detaliile complete.</P>
+        <div className="space-y-2">
+          <H3>Continut pagina:</H3>
+          <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+            <li><strong>Player audio</strong> — ascultati inregistrarea direct din browser.</li>
+            <li><strong>Rezumat AI</strong> — un sumar generat automat al conversatiei.</li>
+            <li><strong>Recomandari</strong> — sfaturi de imbunatatire pentru agent.</li>
+            <li><strong>Transcript</strong> — transcriptul complet cu vorbitori colorati diferit.</li>
+            <li><strong>Scorecard QA</strong> — scorul per regula cu explicatii detaliate.</li>
+            <li><strong>Informatii apel</strong> — agent, telefon client, durata, directie.</li>
+            <li><strong>Info File</strong> — datele brute din fisierul .info (expandabil).</li>
+          </ul>
+          <H3>Actiuni disponibile:</H3>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className="gap-1"><RotateCcw className="h-3 w-3" /> Reanalizeaza — retrimite apelul la AI cu regulile curente</Badge>
+            <Badge variant="outline" className="gap-1"><Trash2 className="h-3 w-3" /> Sterge — elimina apelul din sistem</Badge>
+          </div>
         </div>
       </Section>
 
       <Separator />
 
-      {/* 3. Call Detail */}
-      <Section id="call-detail">
-        <H2>3. Call Detail</H2>
-        <P>Clicking a call opens its detail page (<Code>/calls/[id]</Code>). Two-column layout:</P>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+      {/* Agents Hub */}
+      <Section>
+        <div className="flex items-center gap-2">
+          <Users className="h-5 w-5 text-primary" />
+          <H2>Agenti (Agents Hub)</H2>
+        </div>
+        <P>Pagina de agenti ofera o vedere de ansamblu a performantei fiecarui agent.</P>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+          <li><strong>Carduri sumar</strong> — total agenti, total apeluri, scor mediu, conformitate medie.</li>
+          <li><strong>Grafic scor per agent</strong> — scorul mediu QA pentru fiecare agent (cod de culori).</li>
+          <li><strong>Distributia scorurilor</strong> — grafic circular: excelent / bun / slab, filtrabil per agent.</li>
+          <li><strong>Apeluri per agent</strong> — numarul de apeluri procesate per agent.</li>
+          <li><strong>Tabel detaliat</strong> — sortabil, cu scor, conformitate, durata medie, apeluri semnalate.</li>
+          <li><strong>Detalii agent</strong> — click pe un rand pentru a vedea detalii extinse + link catre apelurile agentului.</li>
+        </ul>
+        <P>Apelurile neeligibile nu sunt incluse in statisticile agentilor.</P>
+      </Section>
+
+      <Separator />
+
+      {/* QA Rules */}
+      <Section>
+        <div className="flex items-center gap-2">
+          <ClipboardCheck className="h-5 w-5 text-primary" />
+          <H2>Reguli QA</H2>
+        </div>
+        <P>Pagina de reguli permite gestionarea criteriilor de evaluare a calitatii apelurilor.</P>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Card className="bg-muted/40">
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center gap-2 mb-1">
+                <ListChecks className="h-4 w-4 text-primary" />
+                <p className="font-medium text-sm">Regula de scoring</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Are un scor maxim (ex: 5 puncte). AI evalueaza si returneaza scorul + explicatie.</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-muted/40">
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Tag className="h-4 w-4 text-blue-500" />
+                <p className="font-medium text-sm">Regula de extractie</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Extrage o valoare din transcript (ex: numele clientului, motivul apelului).</p>
+            </CardContent>
+          </Card>
+        </div>
+        <H3>Gestionare reguli:</H3>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+          <li><strong>Adaugare:</strong> Click pe butonul &quot;+&quot;. Completati titlul, descrierea, sectiunea, scorul maxim.</li>
+          <li><strong>Editare:</strong> Click pe iconita creion.</li>
+          <li><strong>Stergere:</strong> Click pe iconita cos.</li>
+          <li><strong>Reordonare:</strong> Folositi sagetile sus/jos. Regulile sunt evaluate in aceasta ordine.</li>
+          <li><strong>Activare/Dezactivare:</strong> Toggle-ul de pe fiecare regula. Regulile dezactivate nu sunt trimise la AI.</li>
+          <li><strong>Regula critica:</strong> Toggle-ul &quot;Regula critica&quot; in editare. Esecul unei reguli critice marcheaza apelul ca &quot;semnalat&quot; si afecteaza conformitatea agentului.</li>
+          <li><strong>Directie:</strong> Fiecare regula poate fi setata pentru inbound, outbound, sau ambele. Regulile sunt filtrate automat in functie de directia apelului.</li>
+        </ul>
+        <H3>Prompt principal:</H3>
+        <P>Instructiunea de sistem trimisa AI-ului inainte de fiecare analiza. Seteaza contextul si tonul evaluarii. Regulile sunt adaugate automat ca criterii de evaluare numerotate.</P>
+      </Section>
+
+      <Separator />
+
+      {/* Export */}
+      <Section>
+        <div className="flex items-center gap-2">
+          <FileDown className="h-5 w-5 text-primary" />
+          <H2>Export</H2>
+        </div>
+        <P>Exportati datele apelurilor in format CSV.</P>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+          <li>Aplicati filtre (status, agent, sesiune, scor) pentru a exporta un subset.</li>
+          <li>Toggle &quot;Include scoruri per regula&quot; — adauga o coloana pentru fiecare regula QA.</li>
+          <li>Fisierul CSV include: metadate apel, scoruri, nota, rezumat AI.</li>
+          <li>Numele fisierului contine data si ora exportului.</li>
+        </ul>
+      </Section>
+
+      <Separator />
+
+      {/* Logs */}
+      <Section>
+        <div className="flex items-center gap-2">
+          <Activity className="h-5 w-5 text-primary" />
+          <H2>Loguri si monitorizare</H2>
+        </div>
+        <P>Pagina de loguri afiseaza starea procesarii si evenimentele in timp real.</P>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+          <li><strong>Carduri status</strong> — stare ingestie, fisiere in coada, total procesate, esuate.</li>
+          <li><strong>Sesiuni de procesare</strong> — istoricul procesarilor cu progres, durata, actiuni (oprire/continuare/stergere).</li>
+          <li><strong>Jurnal live</strong> — ultimele evenimente de procesare, expandabile cu click.</li>
+          <li><strong>Operatiuni de procesare</strong> — coada de fisiere cu status si progres individual.</li>
+          <li><strong>Flux de procesare</strong> — cei 4 pasi: descarcare, transcriere, analiza, stocare.</li>
+        </ul>
+      </Section>
+
+      <Separator />
+
+      {/* Settings */}
+      <Section>
+        <div className="flex items-center gap-2">
+          <Database className="h-5 w-5 text-primary" />
+          <H2>Setari</H2>
+        </div>
+        <P>Trei pagini de setari configureaza sursele de date si integrarile:</P>
+        <div className="space-y-3">
           {[
-            { icon: MessageSquare, label: "Left — Call Content", desc: "Audio player with waveform and controls. AI Summary with coaching notes. Full transcript with speaker diarization (color-coded). Caller History (previous calls from same number)." },
-            { icon: ListChecks, label: "Right — Scorecard & Info", desc: "QA Scorecard: overall percentage, grade badge (Excellent/Bun/Acceptabil/Slab), per-rule X/Y pts breakdown. Call Information panel. AI Extractions (name, intent, sentiment). Flagged issues panel if applicable." },
+            { icon: Database, label: "Ingestie date", desc: "Configurarea sursei SFTP/S3 pentru inregistrari. Calea de descarcare, programarea zilnica, si triggerul manual." },
+            { icon: Brain, label: "AI si transcriere", desc: "Cheia API pentru serviciul de analiza AI. Configurarea transcrierii (limba, vocabular personalizat, context)." },
+            { icon: Webhook, label: "Export si webhook-uri", desc: "Endpoint pentru trimiterea automata a rezultatelor QA dupa procesare." },
           ].map(({ icon: Icon, label, desc }) => (
-            <Card key={label} className="bg-muted/40">
+            <div key={label} className="flex gap-3 p-4 rounded-lg border">
+              <Icon className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">{label}</p>
+                <P>{desc}</P>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Separator />
+
+      {/* Language + Auth */}
+      <Section>
+        <div className="flex items-center gap-2">
+          <Languages className="h-5 w-5 text-primary" />
+          <H2>Limba si autentificare</H2>
+        </div>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+          <li><strong>Schimbarea limbii:</strong> Click pe butonul de limba din bara laterala pentru a comuta intre Romana si English.</li>
+          <li><strong>Autentificare:</strong> Sistemul necesita autentificare. Contactati administratorul pentru credentiale.</li>
+          <li><strong>Roluri:</strong> Admin (acces complet, gestionare utilizatori), Manager (acces complet fara gestionare utilizatori), Viewer (doar vizualizare).</li>
+          <li><strong>Deconectare:</strong> Click pe butonul de deconectare din bara laterala.</li>
+        </ul>
+      </Section>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   TECHNICAL GUIDE
+   ═══════════════════════════════════════════════════════ */
+
+function TechnicalGuide() {
+  return (
+    <div className="space-y-8">
+
+      {/* Architecture */}
+      <Section>
+        <H2>Arhitectura</H2>
+        <P>Sistem compus din 3 containere Docker:</P>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            { name: "Frontend", tech: "Next.js 15, React 19", desc: "Port configurabil via .env" },
+            { name: "Backend", tech: "FastAPI, Python 3.12", desc: "Port configurabil via .env" },
+            { name: "Database", tech: "PostgreSQL 16", desc: "Port 5432" },
+          ].map(({ name, tech, desc }) => (
+            <Card key={name} className="bg-muted/40">
               <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Icon className="h-4 w-4 text-primary shrink-0" />
-                  <p className="font-medium text-sm">{label}</p>
-                </div>
-                <P>{desc}</P>
+                <p className="font-semibold text-sm">{name}</p>
+                <p className="text-xs text-muted-foreground">{tech}</p>
+                <p className="text-xs text-muted-foreground">{desc}</p>
               </CardContent>
             </Card>
           ))}
@@ -220,75 +363,22 @@ export default function DocsPage() {
 
       <Separator />
 
-      {/* 4. Rules Engine */}
-      <Section id="rules-engine">
-        <H2>4. QA Rules Engine</H2>
-        <P>The Rules page (<Code>/rules</Code>) is where you define and manage QA assessment criteria.</P>
-        <div className="space-y-4 mt-2">
-          <div className="p-4 rounded-lg border">
-            <div className="flex items-center gap-2 mb-2">
-              <MessageSquare className="h-4 w-4 text-primary" />
-              <H3>Main Prompt</H3>
-            </div>
-            <P>The system instruction sent to the AI before every analysis. Sets context and tone. Rules below are automatically appended as numbered evaluation criteria. Edit to change how the AI approaches scoring.</P>
-          </div>
-          <div className="p-4 rounded-lg border">
-            <div className="flex items-center gap-2 mb-2">
-              <ClipboardCheck className="h-4 w-4 text-primary" />
-              <H3>Rules List</H3>
-            </div>
-            <P>Each rule has: title, description (AI instruction), section, and maxScore. Rules are grouped by section. The total possible score is shown at the top.</P>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-              {[
-                { icon: ListChecks, label: "Scored Rule", desc: "Has maxScore (e.g. 5 pts). AI returns score 0–maxScore + explanation." },
-                { icon: Tag, label: "Extraction Rule", desc: "Has extractionKey (e.g. customer_name). AI extracts a value from transcript." },
-              ].map(({ icon: Icon, label, desc }) => (
-                <Card key={label} className="bg-muted/40">
-                  <CardContent className="pt-3 pb-2 flex items-start gap-2">
-                    <Icon className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-sm">{label}</p>
-                      <p className="text-xs text-muted-foreground">{desc}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <H3>Managing Rules</H3>
-            <ul className="space-y-1 text-sm text-muted-foreground list-disc list-inside">
-              <li><strong>Add:</strong> Click &quot;Add Rule&quot;. Fill in title, description, section, maxScore (or mark as extraction).</li>
-              <li><strong>Edit:</strong> Click the pencil icon.</li>
-              <li><strong>Delete:</strong> Click the trash icon.</li>
-              <li><strong>Reorder:</strong> Use up/down arrows. Rules are evaluated in this order.</li>
-              <li><strong>Enable/Disable:</strong> Toggle the switch. Disabled rules are skipped.</li>
-            </ul>
-          </div>
-        </div>
-      </Section>
-
-      <Separator />
-
-      {/* 5. Settings */}
-      <Section id="settings">
-        <H2>5. Settings</H2>
-        <P>Three settings pages configure data sources and integrations:</P>
-        <div className="space-y-3 mt-2">
+      {/* Data Flow */}
+      <Section>
+        <H2>Flux de date</H2>
+        <P>Pipeline-ul de procesare a apelurilor:</P>
+        <div className="space-y-2">
           {[
-            { icon: Database, path: "/settings/ingestion", label: "Data Ingestion", desc: "SFTP/S3 source configuration. Remote path with $yesterday_date variable. Filename regex parser. Daily cron schedule with manual trigger." },
-            { icon: Brain, path: "/settings/ai", label: "AI & Transcription", desc: "OpenRouter API key + model selection. Soniox transcription config (API key, language, custom vocabulary). Free-text Context field for every analysis prompt." },
-            { icon: Webhook, path: "/settings/webhooks", label: "Export & Webhooks", desc: "Webhook endpoint for QA results. Enable/disable, retry count, custom headers. Test endpoint button." },
-          ].map(({ icon: Icon, path, label, desc }) => (
-            <div key={path} className="flex gap-4 p-4 rounded-lg border bg-card">
-              <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                <Icon className="h-4 w-4 text-primary" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold text-sm">{label}</span>
-                  <Code>{path}</Code>
-                </div>
+            { step: "1", title: "Descarcare", desc: "Conectare la SFTP/S3, listare fisiere audio, descarcare in local." },
+            { step: "2", title: "Parsarea metadatelor", desc: "Extragere agent, telefon, durata, directie din fisierul .info." },
+            { step: "3", title: "Transcriere", desc: "Trimitere audio la Soniox. Rezultat: transcript cu diarizare (identificare vorbitori)." },
+            { step: "4", title: "Analiza AI", desc: "Trimitere transcript + reguli la LLM. Rezultat: scor per regula, rezumat, recomandari." },
+            { step: "5", title: "Stocare", desc: "Salvare rezultate in PostgreSQL. Trimitere webhook daca este configurat." },
+          ].map(({ step, title, desc }) => (
+            <div key={step} className="flex gap-3 p-3 rounded-lg border">
+              <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">{step}</div>
+              <div>
+                <p className="text-sm font-medium">{title}</p>
                 <P>{desc}</P>
               </div>
             </div>
@@ -296,122 +386,47 @@ export default function DocsPage() {
         </div>
       </Section>
 
-      {/* ===== PART B: TECHNICAL GUIDE ===== */}
-      <Separator />
-      <div className="flex items-center gap-2 mb-2">
-        <Wrench className="h-5 w-5 text-primary" />
-        <h2 className="text-2xl font-bold tracking-tight">Part B: Technical Guide</h2>
-      </div>
-      <P>How the system works under the hood — for developers.</P>
-
       <Separator />
 
-      {/* 6. Architecture */}
-      <Section id="architecture">
-        <H2>6. Architecture</H2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+      {/* Database */}
+      <Section>
+        <H2>Schema bazei de date</H2>
+        <div className="space-y-2">
           {[
-            { name: "Next.js 15", role: "Framework", note: "App Router, static export" },
-            { name: "React 19", role: "UI runtime", note: "Client components with hooks" },
-            { name: "Tailwind CSS", role: "Styling", note: "Utility-first, CSS variables" },
-            { name: "shadcn/ui", role: "Components", note: "Radix primitives, customizable" },
-            { name: "Recharts", role: "Charts", note: "Score trend line chart" },
-            { name: "Soniox", role: "Transcription", note: "STT with speaker diarization" },
-            { name: "OpenRouter", role: "LLM gateway", note: "Claude, GPT-4o, Gemini, etc." },
-          ].map(({ name, role, note }) => (
-            <div key={name} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm">{name}</span>
-                  <Badge variant="outline" className="text-xs">{role}</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">{note}</p>
-              </div>
+            { table: "calls", desc: "Apeluri cu metadate, scoruri AI, directie, eligibilitate, request/response LLM." },
+            { table: "transcript_lines", desc: "Linii de transcript (vorbitor, timestamp, text). FK catre calls.id cu cascade delete." },
+            { table: "scorecard_entries", desc: "Rezultate per regula (scor, passed, detalii). FK catre calls.id cu cascade delete." },
+            { table: "qa_rules", desc: "Reguli de evaluare cu directie (inbound/outbound/both), is_critical, enabled." },
+            { table: "ingestion_runs", desc: "Sesiuni de procesare (progres, status, fisiere)." },
+            { table: "transcription_jobs", desc: "Operatiuni de transcriere per fisier." },
+            { table: "log_entries", desc: "Jurnalul evenimentelor de procesare." },
+            { table: "settings", desc: "Configurari (SFTP, S3, LLM, Soniox, webhook) — valori sensibile criptate." },
+            { table: "users", desc: "Utilizatori cu roluri (admin/manager/viewer), parole bcrypt." },
+          ].map(({ table, desc }) => (
+            <div key={table} className="flex gap-3 p-2 rounded-lg border">
+              <Badge variant="outline" className="font-mono text-xs shrink-0">{table}</Badge>
+              <P>{desc}</P>
             </div>
           ))}
         </div>
-        <P className="mt-2">Static export via <Code>output: &quot;export&quot;</Code>. Dynamic routes use <Code>generateStaticParams</Code>. All data mutations currently use mock server actions.</P>
       </Section>
 
       <Separator />
 
-      {/* 7. Data Flow */}
-      <Section id="data-flow">
-        <H2>7. Data Flow</H2>
-        <P>End-to-end processing pipeline:</P>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2 mb-4">
-          {[
-            { icon: FileAudio, label: "Ingestion", desc: "SFTP / S3 → audio files" },
-            { icon: Cpu, label: "Transcription", desc: "Soniox STT + diarization" },
-            { icon: Brain, label: "AI Analysis", desc: "LLM scores each QA rule" },
-          ].map(({ icon: Icon, label, desc }) => (
-            <Card key={label} className="bg-muted/40">
-              <CardContent className="pt-4 pb-3 flex items-center gap-3">
-                <Icon className="h-5 w-5 text-primary shrink-0" />
-                <div>
-                  <p className="font-medium text-sm">{label}</p>
-                  <p className="text-xs text-muted-foreground">{desc}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <ol className="space-y-3">
-          <Step step="1" title="File Discovery" body="At cron hour, connect to SFTP/S3, list audio files, queue new ones not in database." />
-          <Step step="2" title="Metadata Extraction" body="Match filename against regex. Extract phone, date, time from named capture groups." />
-          <Step step="3" title="Transcription" body="Send audio to Soniox. Get transcript with speaker diarization. Custom vocabulary improves accuracy." />
-          <Step step="4" title="LLM Analysis" body="Build prompt: main prompt + context + transcript + rules. LLM returns structured JSON scorecard." />
-          <Step step="5" title="Score Calculation & Storage" body="Parse scorecard, calculate scores, store results. Send webhook if configured." />
-        </ol>
-      </Section>
-
-      <Separator />
-
-      {/* 8. QA Rules System */}
-      <Section id="qa-rules-system">
-        <H2>8. QA Rules System</H2>
-        <P>Two rule types. All return structured JSON — no separate output type field.</P>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-          <div className="p-4 rounded-lg border">
-            <div className="flex items-center gap-2 mb-2">
-              <ListChecks className="h-4 w-4 text-primary" />
-              <H3>Scored Rules</H3>
-            </div>
-            <P>Have a <Code>maxScore</Code> (2–5 pts). AI evaluates and returns score 0 to maxScore + explanation.</P>
-            <div className="mt-2 bg-muted rounded-lg p-2 font-mono text-xs">
-              {"{ ruleId: \"rule-001\", score: 2, maxScore: 2, details: \"Agent greeted...\" }"}
-            </div>
-          </div>
-          <div className="p-4 rounded-lg border">
-            <div className="flex items-center gap-2 mb-2">
-              <Tag className="h-4 w-4 text-blue-500" />
-              <H3>Extraction Rules</H3>
-            </div>
-            <P>Have <Code>extractionKey</Code> (snake_case), no maxScore. AI extracts a value from transcript.</P>
-            <div className="mt-2 bg-muted rounded-lg p-2 font-mono text-xs">
-              {"{ extractionKey: \"customer_name\", value: \"Ion Popescu\" }"}
-            </div>
-          </div>
-        </div>
-        <P className="mt-3">Rules organized into sections with Romanian/English names. <Code>order</Code> field controls evaluation sequence.</P>
-      </Section>
-
-      <Separator />
-
-      {/* 9. Scoring */}
-      <Section id="scoring">
-        <H2>9. Scoring &amp; Grades</H2>
-        <P>Overall score is a percentage:</P>
+      {/* Scoring */}
+      <Section>
+        <H2>Sistem de scorare</H2>
+        <P>Scorul general este un procentaj calculat de AI:</P>
         <div className="bg-muted rounded-lg p-3 font-mono text-xs mt-1 mb-3">
-          percentage = (sum of rule scores) / (sum of rule maxScores) × 100
+          overallScore = (totalEarned / totalPossible) x 100
         </div>
-        <P>Only scored rules contribute. Extraction rules excluded.</P>
+        <P>Doar regulile de scoring contribuie. Regulile de extractie nu au scor.</P>
         <div className="flex flex-wrap gap-3 mt-3">
           {[
-            { label: "Excellent", color: "text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950 dark:border-emerald-800", range: "≥ 90%" },
-            { label: "Good (Bun)", color: "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-950 dark:border-blue-800", range: "75–89%" },
-            { label: "Acceptable", color: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800", range: "60–74%" },
-            { label: "Poor (Slab)", color: "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-950 dark:border-red-800", range: "&lt; 60%" },
+            { label: "Excelent", color: "bg-green-100 text-green-800 border-green-200", range: ">= 90%" },
+            { label: "Bun", color: "bg-blue-100 text-blue-800 border-blue-200", range: "75–89%" },
+            { label: "Acceptabil", color: "bg-yellow-100 text-yellow-800 border-yellow-200", range: "60–74%" },
+            { label: "Slab", color: "bg-red-100 text-red-800 border-red-200", range: "< 60%" },
           ].map(({ label, color, range }) => (
             <div key={label} className={`p-3 rounded-lg border flex-1 min-w-[120px] ${color}`}>
               <p className="text-sm font-bold">{label}</p>
@@ -419,108 +434,86 @@ export default function DocsPage() {
             </div>
           ))}
         </div>
-        <div className="mt-4 p-4 rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+        <div className="mt-3 p-3 rounded-lg border border-red-200 bg-red-50">
           <div className="flex items-center gap-2 mb-1">
-            <Shield className="h-4 w-4 text-red-600 dark:text-red-400" />
-            <p className="text-sm font-bold text-red-800 dark:text-red-300">Critical Failures → Instant Poor</p>
+            <Shield className="h-4 w-4 text-red-600" />
+            <p className="text-sm font-bold text-red-800">Reguli critice</p>
           </div>
-          <ul className="text-sm text-red-700 dark:text-red-400 list-disc list-inside space-y-0.5">
-            <li>Factually incorrect product/pricing information</li>
-            <li>PII mishandling</li>
-            <li>Failure to escalate when clearly needed</li>
-            <li>Rude, aggressive, or inappropriate language</li>
-          </ul>
+          <P>Daca o regula marcata ca &quot;critica&quot; esueaza, apelul este semnalat automat si conformitatea agentului scade.</P>
+        </div>
+        <div className="mt-3 p-3 rounded-lg border border-orange-200 bg-orange-50">
+          <p className="text-sm font-bold text-orange-800 mb-1">Apeluri neeligibile</p>
+          <P>AI determina automat daca apelul este eligibil (mesagerie vocala, prea scurt, fara interactiune reala). Apelurile neeligibile nu afecteaza statisticile.</P>
         </div>
       </Section>
 
       <Separator />
 
-      {/* 10. API Endpoint */}
-      <Section id="api-endpoint">
-        <H2>10. API Endpoint</H2>
-        <P><Code>POST /api/analyze</Code> — takes transcript + rules, calls LLM via OpenRouter, returns scorecard.</P>
-        <div className="space-y-3 mt-2">
-          <div className="p-4 rounded-lg border">
-            <H3>Request Body</H3>
-            <div className="bg-muted rounded-lg p-3 font-mono text-xs overflow-x-auto mt-1 whitespace-pre">{"{\n  \"transcript\": [\n    { \"speaker\": \"speaker_0\", \"timestamp\": 0, \"text\": \"Bună ziua...\" }\n  ],\n  \"rules\": [ /* QARule[] */ ],\n  \"mainPrompt\": \"You are a QA analyst...\"\n}"}</div>
-          </div>
-          <div className="p-4 rounded-lg border">
-            <H3>Response</H3>
-            <div className="bg-muted rounded-lg p-3 font-mono text-xs overflow-x-auto mt-1 whitespace-pre">{"{\n  \"summary\": \"Overall assessment...\",\n  \"improvementAdvice\": [\"Practice active listening...\"],\n  \"grade\": \"Good\",\n  \"overallScore\": 78.5,\n  \"totalEarned\": 78,\n  \"totalPossible\": 100,\n  \"results\": [\n    { \"ruleId\": \"rule-001\", \"passed\": true, \"score\": 2, \"maxScore\": 2, \"details\": \"...\" }\n  ],\n  \"hasCriticalFailure\": false\n}"}</div>
-          </div>
-          <P>Requires <Code>OPENROUTER_API_KEY</Code> env var. Returns 400/429/500 for errors.</P>
-        </div>
+      {/* Security */}
+      <Section>
+        <H2>Securitate</H2>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+          <li><strong>Autentificare JWT</strong> — access token (1h) + refresh token (7 zile).</li>
+          <li><strong>Parole</strong> — hash bcrypt, minim 8 caractere, cel putin o litera mare si o cifra.</li>
+          <li><strong>Criptare setari</strong> — cheile API si parolele din setari sunt criptate AES-256 in baza de date.</li>
+          <li><strong>CORS</strong> — configurat doar pentru originile din .env.</li>
+          <li><strong>Toate endpoint-urile protejate</strong> — necesita Bearer token valid (exceptie: login, refresh).</li>
+        </ul>
       </Section>
 
       <Separator />
 
-      {/* 11. Prompt Structure */}
-      <Section id="prompt-structure">
-        <H2>11. Prompt Structure</H2>
-        <P>Single LLM prompt assembled from four parts:</P>
-        <div className="space-y-2 mt-2">
+      {/* Configuration */}
+      <Section>
+        <H2>Configurare (.env)</H2>
+        <P>Toate configurarile sunt centralizate in fisierul .env din radacina proiectului:</P>
+        <div className="space-y-1 mt-2">
           {[
-            { step: "1", title: "Main Prompt", body: "System instruction from /rules page. Sets evaluator persona." },
-            { step: "2", title: "Evaluation Criteria", body: "Each enabled scored rule as: \"N. [ID] [maxScore: X] Title — Description\". Extraction rules listed separately with keys." },
-            { step: "3", title: "Transcript", body: "Formatted: \"[speaker_0 @ 0s]: Bună ziua...\"" },
-            { step: "4", title: "Output Format", body: "Instructions to return ONLY valid JSON with summary, improvementAdvice, per-rule results, grade." },
-          ].map(({ step, title, body }) => (
-            <div key={step} className="flex gap-3">
-              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 text-muted-foreground">
-                {step}
-              </div>
-              <div>
-                <p className="text-sm font-medium">{title}</p>
-                <P>{body}</P>
-              </div>
+            { key: "SERVER_HOST", desc: "IP-ul serverului" },
+            { key: "FRONTEND_PORT / BACKEND_PORT", desc: "Porturile serviciilor" },
+            { key: "JWT_SECRET_KEY", desc: "Cheia secreta pentru tokenuri JWT (obligatoriu)" },
+            { key: "ENCRYPTION_KEY", desc: "Cheia de criptare pentru setari sensibile (obligatoriu)" },
+            { key: "POSTGRES_*", desc: "Credentiale baza de date" },
+            { key: "OPENROUTER_API_KEY", desc: "Cheia API pentru analiza AI" },
+            { key: "SONIOX_API_KEY", desc: "Cheia API pentru transcriere" },
+            { key: "SFTP_* / S3_*", desc: "Credentiale sursa de inregistrari" },
+            { key: "TZ", desc: "Fusul orar (default: Europe/Bucharest)" },
+            { key: "INGEST_CRON_HOUR", desc: "Ora de ingestie zilnica automata" },
+          ].map(({ key, desc }) => (
+            <div key={key} className="flex gap-3 py-1">
+              <Badge variant="outline" className="font-mono text-xs shrink-0">{key}</Badge>
+              <span className="text-sm text-muted-foreground">{desc}</span>
             </div>
           ))}
         </div>
-        <P className="mt-2">Server parses JSON, handles markdown fences, validates structure, recalculates grade server-side. Temperature: 0.1.</P>
       </Section>
 
       <Separator />
 
-      {/* 12. Production Migration */}
-      <Section id="production">
-        <H2>12. Production Migration</H2>
-        <P>Current state: all mock data, no real API calls for storage.</P>
-        <div className="p-4 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-          <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2">Steps to go live:</p>
-          <ol className="text-sm text-amber-700 dark:text-amber-400 space-y-1 list-decimal list-inside">
-            <li>Replace <Code>src/lib/actions.ts</Code> stubs with real database writes</li>
-            <li>Replace mock data in <Code>src/lib/mockData.ts</Code> with data-fetching functions</li>
-            <li>Implement ingestion pipeline (SFTP/S3 → Soniox → DB)</li>
-            <li>Connect <Code>/api/analyze</Code> to real transcripts from DB</li>
-            <li>Set env vars: <Code>OPENROUTER_API_KEY</Code>, <Code>SONIOX_API_KEY</Code></li>
-            <li>Configure webhook endpoint for external integrations</li>
-          </ol>
-        </div>
-        <P className="mt-2">UI components need no changes — they accept data via props/interfaces. Only the data layer swaps.</P>
-      </Section>
-
-      <Separator />
-
-      {/* 13. Codebase */}
-      <Section id="codebase">
-        <H2>13. Codebase Structure</H2>
-        <div className="space-y-2">
+      {/* API Endpoints */}
+      <Section>
+        <H2>Endpoint-uri API</H2>
+        <div className="space-y-1 mt-2">
           {[
-            { icon: FolderOpen, path: "src/app/", desc: "Next.js App Router pages. Each folder is a route." },
-            { icon: FolderOpen, path: "src/app/api/analyze/", desc: "POST endpoint for real LLM-based QA scoring via OpenRouter." },
-            { icon: FolderOpen, path: "src/app/calls/[id]/", desc: "Dynamic call detail. CallDetailClient.tsx is the interactive component." },
-            { icon: FolderOpen, path: "src/components/ui/", desc: "shadcn/ui components — project-owned, edit freely." },
-            { icon: FolderOpen, path: "src/components/sidebar.tsx", desc: "Main navigation. Add nav items to the navItems array." },
-            { icon: GitBranch, path: "src/lib/mockData.ts", desc: "TypeScript interfaces (Call, QARule, TranscriptLine, etc.) and mock data." },
-            { icon: GitBranch, path: "src/lib/actions.ts", desc: "Server actions for data mutation. Currently stubbed." },
-            { icon: Layers, path: "src/lib/utils.ts", desc: "cn() for Tailwind class merging (from shadcn/ui)." },
-          ].map(({ icon: Icon, path, desc }) => (
-            <div key={path} className="flex gap-3 p-3 rounded-lg border">
-              <Icon className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div>
-                <Code>{path}</Code>
-                <P><span className="ml-1">{desc}</span></P>
-              </div>
+            { method: "POST", path: "/api/auth/login", desc: "Autentificare" },
+            { method: "POST", path: "/api/auth/refresh", desc: "Reinnoirea tokenului" },
+            { method: "GET", path: "/api/calls", desc: "Lista apeluri cu filtre si paginare" },
+            { method: "GET", path: "/api/calls/{id}", desc: "Detalii apel complet" },
+            { method: "GET", path: "/api/calls/stats", desc: "Statistici dashboard" },
+            { method: "GET", path: "/api/calls/agents/stats", desc: "Statistici per agent" },
+            { method: "GET", path: "/api/calls/export/csv", desc: "Export CSV" },
+            { method: "DELETE", path: "/api/calls/{id}", desc: "Stergere apel" },
+            { method: "POST", path: "/api/analyze", desc: "Analiza/reanaliza apel cu AI" },
+            { method: "GET", path: "/api/rules", desc: "Lista reguli QA" },
+            { method: "POST/PUT/DELETE", path: "/api/rules/*", desc: "CRUD reguli" },
+            { method: "POST", path: "/api/ingestion/trigger", desc: "Declansare ingestie manuala" },
+            { method: "GET", path: "/api/settings/{key}", desc: "Citire setari" },
+            { method: "PUT", path: "/api/settings/{key}", desc: "Salvare setari" },
+          ].map(({ method, path, desc }) => (
+            <div key={path + method} className="flex items-center gap-3 py-1">
+              <Badge variant="secondary" className="font-mono text-xs w-14 justify-center shrink-0">{method.split("/")[0]}</Badge>
+              <span className="font-mono text-xs text-muted-foreground">{path}</span>
+              <span className="text-xs text-muted-foreground ml-auto">{desc}</span>
             </div>
           ))}
         </div>

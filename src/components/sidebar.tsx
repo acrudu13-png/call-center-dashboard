@@ -14,6 +14,7 @@ import {
   Brain,
   FileDown,
   Webhook,
+  UserCog,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -32,7 +33,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-type NavKey = "dashboard" | "calls" | "agents" | "rules" | "export" | "logs" | "ingestion" | "ai" | "webhooks" | "docs";
+type NavKey = "dashboard" | "calls" | "agents" | "rules" | "export" | "logs" | "ingestion" | "ai" | "webhooks" | "users" | "docs";
 
 const navItems: { href: string; key: NavKey; icon: React.ElementType }[] = [
   { href: "/", key: "dashboard", icon: LayoutDashboard },
@@ -44,6 +45,7 @@ const navItems: { href: string; key: NavKey; icon: React.ElementType }[] = [
   { href: "/settings/ingestion", key: "ingestion", icon: Database },
   { href: "/settings/ai", key: "ai", icon: Brain },
   { href: "/settings/webhooks", key: "webhooks", icon: Webhook },
+  { href: "/users", key: "users", icon: UserCog },
   { href: "/docs", key: "docs", icon: BookOpen },
 ];
 

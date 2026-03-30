@@ -47,6 +47,7 @@ const ro: Translations = {
     ingestion: "Ingestie date",
     ai: "AI & Transcriere",
     webhooks: "Export & Webhook-uri",
+    users: "Utilizatori",
     docs: "Documentatie",
     signOut: "Deconectare",
   },

@@ -400,6 +400,50 @@ export function getAudioUrl(callId: string): string {
   return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }
 
+// ── Users ─────────────────────────────────────────────────
+
+export interface UserInfo {
+  id: string;
+  username: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+}
+
+export async function fetchUsers(): Promise<{ users: UserInfo[]; total: number }> {
+  return apiFetch("/api/auth/users");
+}
+
+export async function createUser(data: {
+  username: string;
+  email: string;
+  password: string;
+  full_name?: string;
+  role?: string;
+}): Promise<UserInfo> {
+  return apiFetch("/api/auth/users", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateUser(userId: string, data: {
+  email?: string;
+  full_name?: string;
+  role?: string;
+  is_active?: boolean;
+}): Promise<UserInfo> {
+  return apiFetch(`/api/auth/users/${userId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  return apiFetch(`/api/auth/users/${userId}`, { method: "DELETE" });
+}
+
 // ── Health ─────────────────────────────────────────────────
 
 export async function healthCheck(): Promise<{ status: string; version: string }> {

@@ -45,6 +45,7 @@ const en = {
     ingestion: "Data Ingestion",
     ai: "AI & Transcription",
     webhooks: "Export & Webhooks",
+    users: "Users",
     docs: "Documentation",
     signOut: "Sign out",
   },
