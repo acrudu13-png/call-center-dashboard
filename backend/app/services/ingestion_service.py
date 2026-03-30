@@ -43,6 +43,7 @@ def _parse_info_file(audio_path: str) -> dict:
         "customer_phone": "Unknown",
         "duration": 0,
         "direction": "unknown",  # inbound | outbound | unknown
+        "info_raw": "",
     }
 
     # Find the .info file: audio is TELERENTA_123--456_R207-N210_..._date_time.au
@@ -64,6 +65,8 @@ def _parse_info_file(audio_path: str) -> dict:
     try:
         with open(info_path, "r", encoding="utf-8") as f:
             content = f.read()
+
+        result["info_raw"] = content
 
         # Parse key=value pairs
         kv = {}
@@ -124,20 +127,18 @@ def _parse_info_file(audio_path: str) -> dict:
                 break
 
         # Call direction from _CALL_FLOW_=[from]-->[to]
-        # STATION-->EXTERNAL = outbound, EXTERNAL-->STATION = inbound
+        # Short internal number = agent station, +40... or long number = external
         for line in content.splitlines():
             if line.strip().startswith("_CALL_FLOW_="):
                 flow = line.strip().split("=", 1)[1]
-                # Extract [left]-->[right]
                 flow_match = re.match(r'\[(.+?)\]-->\[(.+?)\]', flow)
                 if flow_match:
                     left, right = flow_match.group(1), flow_match.group(2)
-                    # If left is a short number (station) and right is external phone
-                    left_is_station = station.get("number") == left
-                    right_is_station = station.get("number") == right
-                    if left_is_station:
+                    left_is_external = left.startswith("+") or len(left) > 6
+                    right_is_external = right.startswith("+") or len(right) > 6
+                    if not left_is_external and right_is_external:
                         result["direction"] = "outbound"
-                    elif right_is_station:
+                    elif left_is_external and not right_is_external:
                         result["direction"] = "inbound"
                 break
 
@@ -594,6 +595,7 @@ class IngestionService:
             status="processing",
             audio_file_path=file_path,
             ingestion_run_id=run_id,
+            raw_json={"info_file": meta.get("info_raw", "")},
         )
         if meta["agent_name"] != "Unknown":
             log("info", f"Metadata: agent={meta['agent_name']}, phone={meta['customer_phone']}, duration={duration}s, direction={meta['direction']}")

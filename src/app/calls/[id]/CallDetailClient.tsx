@@ -518,11 +518,47 @@ export default function CallDetailClient({
         </div>
       </div>
 
+      {/* Info File Panel */}
+      {call.rawJson?.info_file && (
+        <InfoFilePanel content={call.rawJson.info_file as string} />
+      )}
+
       {/* LLM Debug Panel */}
       {(call.llmRequest || call.llmResponse) && (
         <LlmDebugPanel request={call.llmRequest} response={call.llmResponse} />
       )}
     </div>
+  );
+}
+
+function InfoFilePanel({ content }: { content: string }) {
+  const [open, setOpen] = useState(false);
+
+  if (!content) return null;
+
+  return (
+    <Card className="border-dashed border-muted-foreground/30">
+      <CardHeader className="pb-2 cursor-pointer" onClick={() => setOpen(!open)}>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Tag className="h-4 w-4" />
+            Info File
+          </CardTitle>
+          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
+            {open ? "Collapse" : "Expand"}
+          </Button>
+        </div>
+      </CardHeader>
+      {open && (
+        <CardContent>
+          <ScrollArea className="h-[300px]">
+            <pre className="text-xs font-mono whitespace-pre-wrap bg-muted p-4 rounded-lg">
+              {content}
+            </pre>
+          </ScrollArea>
+        </CardContent>
+      )}
+    </Card>
   );
 }
 
