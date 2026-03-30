@@ -254,6 +254,11 @@ export default function CallDetailClient({
           <Badge variant="outline" className="text-xs">
             {call.direction === "inbound" ? "Inbound" : call.direction === "outbound" ? "Outbound" : "—"}
           </Badge>
+          {!call.isEligible && (
+            <Badge variant="destructive" className="text-xs">
+              N/A{call.ineligibleReason ? `: ${call.ineligibleReason}` : ""}
+            </Badge>
+          )}
           <GradeBadge grade={grade} />
           <Badge variant={call.status === "completed" ? "default" : call.status === "flagged" ? "destructive" : "secondary"}>
             {call.status}

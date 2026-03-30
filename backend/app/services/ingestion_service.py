@@ -582,9 +582,19 @@ class IngestionService:
             except ValueError:
                 pass
 
+        # Check if this file was already processed — if so, delete old call and rewrite
+        existing = db.query(Call).filter(Call.audio_file_path == file_path).first()
+        if existing:
+            log("info", f"Rewriting existing call {existing.call_id} for {filename}")
+            reuse_call_id = existing.call_id
+            db.delete(existing)
+            db.commit()
+        else:
+            reuse_call_id = None
+
         call_count = db.query(Call).count()
         call = Call(
-            call_id=f"CALL-{1000 + call_count}",
+            call_id=reuse_call_id or f"CALL-{1000 + call_count}",
             date_time=call_dt,
             processed_at=utcnow(),
             agent_name=meta["agent_name"],
@@ -639,6 +649,8 @@ class IngestionService:
         call.rules_failed = [r.ruleId for r in analysis.results if not r.passed]
         call.compliance_pass = not analysis.hasCriticalFailure
         call.status = "flagged" if analysis.hasCriticalFailure else "completed"
+        call.is_eligible = analysis.isEligible
+        call.ineligible_reason = analysis.ineligibleReason
         call.llm_request = analysis.llmRequest
         call.llm_response = analysis.llmResponse
 

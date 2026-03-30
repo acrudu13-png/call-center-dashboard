@@ -112,6 +112,8 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         call.rules_failed = [r.ruleId for r in result.results if not r.passed]
         call.compliance_pass = not result.hasCriticalFailure
         call.status = "flagged" if result.hasCriticalFailure else "completed"
+        call.is_eligible = result.isEligible
+        call.ineligible_reason = result.ineligibleReason
         call.llm_request = result.llmRequest
         call.llm_response = result.llmResponse
 

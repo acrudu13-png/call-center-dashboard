@@ -117,15 +117,15 @@ function LogLine({
         <span className={`uppercase font-semibold w-12 shrink-0 ${config.color}`}>
           {log.level}
         </span>
-        <span className="flex-1">
-          {isLong && !expanded ? log.message.slice(0, 150) + "... (click to expand)" : log.message}
+        <span className={`flex-1 ${!expanded && isLong ? "truncate" : ""}`}>
+          {!expanded && isLong ? log.message.slice(0, 120) + "..." : log.message}
         </span>
         {log.jobId && (
           <span className="text-muted-foreground shrink-0">[{log.jobId}]</span>
         )}
       </div>
       {isLong && expanded && (
-        <pre className="mt-2 p-2 bg-muted rounded text-xs whitespace-pre-wrap break-all max-h-[300px] overflow-auto">
+        <pre className="mt-2 p-2 bg-muted rounded text-xs whitespace-pre-wrap break-all max-h-[400px] overflow-auto">
           {log.message}
         </pre>
       )}
@@ -582,7 +582,7 @@ export default function LogsPage() {
                 )}
                 {allLogs.map((log, i) => {
                   const config = levelConfig[log.level] || levelConfig.info;
-                  const isLong = log.message.length > 150;
+                  const isLong = log.message.length > 80 || log.level === "error" || log.level === "warn";
                   return (
                     <LogLine
                       key={`${log.id}-${i}`}

@@ -24,6 +24,8 @@ class Call(Base):
     rules_failed: Mapped[list] = mapped_column(JSON, default=list)
     compliance_pass: Mapped[bool] = mapped_column(Boolean, default=True)
     direction: Mapped[str] = mapped_column(String(10), default="unknown", index=True)  # inbound | outbound | unknown
+    is_eligible: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    ineligible_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     audio_file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     ingestion_run_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     raw_json: Mapped[dict] = mapped_column(JSON, default=dict)

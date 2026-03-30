@@ -35,6 +35,8 @@ class CallSummary(BaseModel):
     rulesFailed: list[str]
     compliancePass: bool
     direction: str = "unknown"
+    isEligible: bool = True
+    ineligibleReason: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -83,5 +85,7 @@ class AnalyzeResponse(BaseModel):
     results: list[ScorecardEntrySchema]
     hasCriticalFailure: bool
     criticalFailureReason: Optional[str] = None
+    isEligible: bool = True
+    ineligibleReason: Optional[str] = None
     llmRequest: Optional[str] = None
     llmResponse: Optional[str] = None

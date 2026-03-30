@@ -51,6 +51,8 @@ export interface CallSummary {
   rulesFailed: string[];
   compliancePass: boolean;
   direction: string;
+  isEligible: boolean;
+  ineligibleReason?: string | null;
 }
 
 export interface CallListResponse {

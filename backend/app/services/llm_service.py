@@ -13,14 +13,21 @@ DEFAULT_MAIN_PROMPT = """Ești un evaluator QA pentru un call center de telecomu
 Analizează transcriptul apelului și evaluează FIECARE regulă din lista de mai jos.
 
 REGULI STRICTE:
-1. Evaluează TOATE regulile — nu sări niciuna.
-2. Returnează regulile în EXACT aceeași ordine.
-3. Folosește EXACT ruleId și ruleTitle furnizate.
-4. Pentru reguli de scoring: score între 0 și maxScore. passed=true dacă score >= maxScore*0.6.
-5. Pentru reguli de extraction: extractedValue = valoarea extrasă, score=0, maxScore=0.
-6. overallScore = (totalEarned / totalPossible) * 100.
-7. grade: "Excelent" >= 90, "Bun" >= 75, "Acceptabil" >= 60, "Slab" < 60.
-8. hasCriticalFailure = true dacă orice regulă critică are passed=false.
+1. PRIMUL LUCRU: determină dacă apelul este eligibil pentru evaluare (isEligible).
+   Setează isEligible=false și ineligibleReason dacă:
+   - Apelul este un mesaj vocal / voicemail / robot telefonic
+   - Apelul este prea scurt pentru a fi evaluat (sub 10 secunde de conversație reală)
+   - Nu există o interacțiune reală între agent și client
+   - Clientul a închis înainte de a vorbi cu agentul
+   În aceste cazuri, pune toate scorurile pe 0 și grade="Slab".
+2. Evaluează TOATE regulile — nu sări niciuna.
+3. Returnează regulile în EXACT aceeași ordine.
+4. Folosește EXACT ruleId și ruleTitle furnizate.
+5. Pentru reguli de scoring: score între 0 și maxScore. passed=true dacă score >= maxScore*0.6.
+6. Pentru reguli de extraction: extractedValue = valoarea extrasă, score=0, maxScore=0.
+7. overallScore = (totalEarned / totalPossible) * 100.
+8. grade: "Excelent" >= 90, "Bun" >= 75, "Acceptabil" >= 60, "Slab" < 60.
+9. hasCriticalFailure = true dacă orice regulă critică are passed=false.
 
 Răspunde DOAR cu JSON valid."""
 
@@ -72,11 +79,14 @@ def _build_schema_for_rules(rules: list[dict]) -> dict:
                 },
                 "hasCriticalFailure": {"type": "boolean"},
                 "criticalFailureReason": {"type": ["string", "null"]},
+                "isEligible": {"type": "boolean", "description": "false if voicemail, too short, no real conversation, or client hung up before talking"},
+                "ineligibleReason": {"type": ["string", "null"], "description": "Reason in Romanian why the call is not eligible for QA evaluation, or null if eligible"},
             },
             "required": [
                 "summary", "improvementAdvice", "grade", "overallScore",
                 "totalEarned", "totalPossible", "results",
                 "hasCriticalFailure", "criticalFailureReason",
+                "isEligible", "ineligibleReason",
             ],
             "additionalProperties": False,
         },
@@ -243,6 +253,10 @@ class LLMService:
             result["hasCriticalFailure"] = False
         if "criticalFailureReason" not in result:
             result["criticalFailureReason"] = None
+        if "isEligible" not in result:
+            result["isEligible"] = True
+        if "ineligibleReason" not in result:
+            result["ineligibleReason"] = None
 
         logger.info(f"LLM returned {len(result.get('results', []))} results, grade={result.get('grade')}, score={result.get('overallScore')}")
 
@@ -297,6 +311,8 @@ class LLMService:
             ],
             hasCriticalFailure=result["hasCriticalFailure"],
             criticalFailureReason=result.get("criticalFailureReason"),
+            isEligible=result.get("isEligible", True),
+            ineligibleReason=result.get("ineligibleReason"),
             llmRequest=debug_request,
             llmResponse=debug_response,
         )

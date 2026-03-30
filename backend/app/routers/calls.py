@@ -43,6 +43,8 @@ def _call_to_summary(c: Call) -> CallSummary:
         rulesFailed=c.rules_failed or [],
         compliancePass=c.compliance_pass,
         direction=c.direction or "unknown",
+        isEligible=c.is_eligible if c.is_eligible is not None else True,
+        ineligibleReason=c.ineligible_reason,
     )
 
 
@@ -115,17 +117,19 @@ def list_calls(
 
 @router.get("/stats")
 def call_stats(db: Session = Depends(get_db)):
-    """Dashboard statistics."""
+    """Dashboard statistics — excludes ineligible calls from score/compliance metrics."""
+    eligible = db.query(Call).filter(Call.is_eligible == True)
     total = db.query(Call).count()
     completed = db.query(Call).filter(Call.status == "completed").count()
     flagged = db.query(Call).filter(Call.status == "flagged").count()
     in_review = db.query(Call).filter(Call.status == "in_review").count()
     processing = db.query(Call).filter(Call.status == "processing").count()
 
-    avg_score = db.query(func.avg(Call.qa_score)).filter(Call.status != "processing").scalar() or 0
+    eligible_done = eligible.filter(Call.status != "processing").count() or 1
+    avg_score = eligible.filter(Call.status != "processing").with_entities(func.avg(Call.qa_score)).scalar() or 0
     compliance_rate = (
-        db.query(Call).filter(Call.compliance_pass == True, Call.status != "processing").count()
-        / max(total - processing, 1)
+        eligible.filter(Call.compliance_pass == True, Call.status != "processing").count()
+        / eligible_done
         * 100
     )
 
@@ -176,7 +180,7 @@ def agent_stats(db: Session = Depends(get_db)):
             func.sum(case((and_(Call.qa_score >= 70, Call.qa_score < 85), 1), else_=0)).label("good_count"),
             func.sum(case((Call.qa_score < 70, 1), else_=0)).label("poor_count"),
         )
-        .filter(Call.status != "processing")
+        .filter(Call.status != "processing", Call.is_eligible == True)
         .group_by(Call.agent_id, Call.agent_name)
         .order_by(Call.agent_name)
         .all()
@@ -338,6 +342,8 @@ def get_call(call_id: str, db: Session = Depends(get_db)):
         rulesFailed=call.rules_failed or [],
         compliancePass=call.compliance_pass,
         direction=call.direction or "unknown",
+        isEligible=call.is_eligible if call.is_eligible is not None else True,
+        ineligibleReason=call.ineligible_reason,
         transcript=transcript,
         aiScorecard=scorecard,
         aiSummary=call.ai_summary,
