@@ -452,61 +452,86 @@ class IngestionService:
             if stopped:
                 return
 
+            MAX_RETRIES = 3
+
             async with semaphore:
                 if self._stop.is_set():
                     return
 
                 filename = os.path.basename(file_path)
                 job_id = f"JOB-{uuid.uuid4().hex[:8].upper()}"
+                last_error = None
 
-                # Each worker gets its own DB session
-                db = SessionLocal()
-                try:
-                    call_id = await self._process_file_with_session(
-                        db, file_path, job_id, source, settings, run.run_id, all_rules_data, min_duration
-                    )
-                    async with lock:
-                        created_ids.append(call_id)
-                        run.processed_files = skipped + len(created_ids)
-                        self.db.commit()
-                        _broadcast_run(run)
+                for attempt in range(1, MAX_RETRIES + 1):
+                    if self._stop.is_set():
+                        return
 
-                except (IngestionStopped, InterruptedError):
-                    stopped = True
-                    return
+                    # Each attempt gets its own DB session
+                    db = SessionLocal()
+                    try:
+                        call_id = await self._process_file_with_session(
+                            db, file_path, job_id, source, settings, run.run_id, all_rules_data, min_duration
+                        )
+                        async with lock:
+                            created_ids.append(call_id)
+                            run.processed_files = skipped + len(created_ids)
+                            self.db.commit()
+                            _broadcast_run(run)
+                        last_error = None
+                        break  # success
 
-                except Exception as e:
-                    async with lock:
-                        failed_count += 1
-                        run.failed_files = failed_count
-                        self.db.commit()
-                        _broadcast_run(run)
+                    except (IngestionStopped, InterruptedError):
+                        stopped = True
+                        return
 
-                    # Mark job failed
-                    job = db.query(TranscriptionJob).filter(
-                        TranscriptionJob.job_id == job_id).first()
-                    if job and job.status != "completed":
-                        job.status = "failed"
-                        job.error_message = str(e)[:1000]
-                        job.completed_at = utcnow()
-                        db.commit()
-                        _broadcast_job(job)
+                    except Exception as e:
+                        last_error = e
+                        db.close()
+                        if attempt < MAX_RETRIES:
+                            _log(self.db, "warn", "ingestion",
+                                 f"Attempt {attempt}/{MAX_RETRIES} failed for {filename}: {e}. Retrying...", job_id)
+                            await asyncio.sleep(2 * attempt)  # backoff: 2s, 4s
+                        continue
 
-                    # Mark call as failed too
-                    from app.models.call import Call
-                    failed_call = db.query(Call).filter(
-                        Call.audio_file_path == file_path
-                    ).first()
-                    if failed_call and failed_call.status == "processing":
-                        failed_call.status = "failed"
-                        failed_call.is_eligible = False
-                        failed_call.ineligible_reason = f"Eroare procesare: {str(e)[:200]}"
-                        db.commit()
+                    finally:
+                        if db.is_active:
+                            db.close()
 
-                    _log(db, "error", "ingestion", f"Failed {filename}: {e}", job_id)
+                # All retries exhausted
+                if last_error is not None:
+                    db = SessionLocal()
+                    try:
+                        async with lock:
+                            failed_count += 1
+                            run.failed_files = failed_count
+                            self.db.commit()
+                            _broadcast_run(run)
 
-                finally:
-                    db.close()
+                        # Mark job failed
+                        job = db.query(TranscriptionJob).filter(
+                            TranscriptionJob.job_id == job_id).first()
+                        if job and job.status != "completed":
+                            job.status = "failed"
+                            job.error_message = f"Failed after {MAX_RETRIES} attempts: {str(last_error)[:800]}"
+                            job.completed_at = utcnow()
+                            db.commit()
+                            _broadcast_job(job)
+
+                        # Mark call as failed too
+                        from app.models.call import Call
+                        failed_call = db.query(Call).filter(
+                            Call.audio_file_path == file_path
+                        ).first()
+                        if failed_call and failed_call.status == "processing":
+                            failed_call.status = "failed"
+                            failed_call.is_eligible = False
+                            failed_call.ineligible_reason = f"Eroare dupa {MAX_RETRIES} incercari: {str(last_error)[:200]}"
+                            db.commit()
+
+                        _log(db, "error", "ingestion",
+                             f"Failed {filename} after {MAX_RETRIES} attempts: {last_error}", job_id)
+                    finally:
+                        db.close()
 
                 done = skipped + len(created_ids) + failed_count
                 _log(self.db, "info", "ingestion",
