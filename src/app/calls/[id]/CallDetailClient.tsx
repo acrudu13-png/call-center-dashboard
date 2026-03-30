@@ -36,8 +36,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Slider } from "@/components/ui/slider";
-import { fetchCall, getAudioUrl, analyzeCall, type CallDetail } from "@/lib/api";
-import { RotateCcw } from "lucide-react";
+import { fetchCall, getAudioUrl, analyzeCall, deleteCall, type CallDetail } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { RotateCcw, Trash2 } from "lucide-react";
 
 function formatTime(seconds: number) {
   const total = Math.round(seconds);
@@ -82,6 +83,8 @@ export default function CallDetailClient({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioDuration, setAudioDuration] = useState(0);
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -163,6 +166,18 @@ export default function CallDetailClient({
     }
   };
 
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this call?")) return;
+    setDeleting(true);
+    try {
+      await deleteCall(id);
+      router.push("/calls");
+    } catch (e) {
+      console.error("Delete failed:", e);
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -232,6 +247,13 @@ export default function CallDetailClient({
             {reanalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
             {reanalyzing ? "Analyzing..." : "Reanalyze"}
           </Button>
+          <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleting}>
+            {deleting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
+            {deleting ? "Deleting..." : "Delete"}
+          </Button>
+          <Badge variant="outline" className="text-xs">
+            {call.direction === "inbound" ? "Inbound" : call.direction === "outbound" ? "Outbound" : "—"}
+          </Badge>
           <GradeBadge grade={grade} />
           <Badge variant={call.status === "completed" ? "default" : call.status === "flagged" ? "destructive" : "secondary"}>
             {call.status}

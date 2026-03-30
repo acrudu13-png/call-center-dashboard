@@ -42,6 +42,7 @@ def _call_to_summary(c: Call) -> CallSummary:
         status=c.status,
         rulesFailed=c.rules_failed or [],
         compliancePass=c.compliance_pass,
+        direction=c.direction or "unknown",
     )
 
 
@@ -57,6 +58,7 @@ def list_calls(
     minScore: Optional[float] = None,
     maxScore: Optional[float] = None,
     runId: Optional[str] = None,
+    direction: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     query = db.query(Call)
@@ -68,6 +70,8 @@ def list_calls(
         query = query.filter(Call.agent_id == agentId)
     if runId:
         query = query.filter(Call.ingestion_run_id == runId)
+    if direction:
+        query = query.filter(Call.direction == direction)
     if search:
         pattern = f"%{search}%"
         query = query.filter(
@@ -333,6 +337,7 @@ def get_call(call_id: str, db: Session = Depends(get_db)):
         status=call.status,
         rulesFailed=call.rules_failed or [],
         compliancePass=call.compliance_pass,
+        direction=call.direction or "unknown",
         transcript=transcript,
         aiScorecard=scorecard,
         aiSummary=call.ai_summary,
@@ -361,6 +366,18 @@ def update_call_status(call_id: str, status: str, db: Session = Depends(get_db))
     call.status = status
     db.commit()
     return {"message": f"Call status updated to {status}"}
+
+
+@router.delete("/{call_id}")
+def delete_call(call_id: str, db: Session = Depends(get_db)):
+    call = db.query(Call).filter(
+        (Call.id == call_id) | (Call.call_id == call_id)
+    ).first()
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    db.delete(call)  # cascade deletes transcript_lines + scorecard_entries
+    db.commit()
+    return {"message": f"Call {call.call_id} deleted"}
 
 
 AUDIO_CACHE_DIR = "/tmp/call_audio_cache"

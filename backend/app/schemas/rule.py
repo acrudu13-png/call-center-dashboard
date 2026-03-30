@@ -10,6 +10,7 @@ class QARuleBase(BaseModel):
     max_score: float = 0
     enabled: bool = True
     is_critical: bool = False
+    direction: str = "both"  # inbound | outbound | both
     sort_order: int = 0
 
 
@@ -25,6 +26,7 @@ class QARuleUpdate(BaseModel):
     max_score: Optional[float] = None
     enabled: Optional[bool] = None
     is_critical: Optional[bool] = None
+    direction: Optional[str] = None
     sort_order: Optional[int] = None
 
 

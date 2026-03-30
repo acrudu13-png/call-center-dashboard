@@ -38,6 +38,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  PhoneIncoming,
+  PhoneOutgoing,
 } from "lucide-react";
 import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, type CallSummary, type QARule, type IngestionRunListItem } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -60,6 +62,7 @@ export default function CallsExplorerPage() {
   const [ruleFilter, setRuleFilter] = useState("all");
   const [agentFilter, setAgentFilter] = useState("all");
   const [agents, setAgents] = useState<{ agentId: string; agentName: string; callCount: number }[]>([]);
+  const [directionFilter, setDirectionFilter] = useState("all");
   const [runFilter, setRunFilter] = useState("all");
   const [ingestionRuns, setIngestionRuns] = useState<IngestionRunListItem[]>([]);
   const [dateFrom, setDateFrom] = useState("");
@@ -109,6 +112,7 @@ export default function CallsExplorerPage() {
         maxScore: maxScore ? Number(maxScore) : undefined,
         runId: runFilter !== "all" ? runFilter : undefined,
         agentId: agentFilter !== "all" ? agentFilter : undefined,
+        direction: directionFilter !== "all" ? directionFilter : undefined,
       });
       setCalls(res.calls);
       setTotal(res.total);
@@ -118,7 +122,7 @@ export default function CallsExplorerPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, sortKey, sortDir, statusFilter, minScore, maxScore, runFilter, agentFilter]);
+  }, [page, pageSize, search, sortKey, sortDir, statusFilter, minScore, maxScore, runFilter, agentFilter, directionFilter]);
 
   useEffect(() => {
     loadCalls();
@@ -127,7 +131,7 @@ export default function CallsExplorerPage() {
   // Reset page on filter change
   useEffect(() => {
     setPage(1);
-  }, [search, minScore, maxScore, statusFilter, ruleFilter, runFilter, agentFilter, dateFrom, dateTo, sortKey, sortDir]);
+  }, [search, minScore, maxScore, statusFilter, ruleFilter, runFilter, agentFilter, directionFilter, dateFrom, dateTo, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -159,12 +163,13 @@ export default function CallsExplorerPage() {
     setStatusFilter("all");
     setRuleFilter("all");
     setAgentFilter("all");
+    setDirectionFilter("all");
     setRunFilter("all");
     setDateFrom("");
     setDateTo("");
   };
 
-  const hasActiveFilters = minScore || maxScore || statusFilter !== "all" || ruleFilter !== "all" || agentFilter !== "all" || runFilter !== "all" || dateFrom || dateTo;
+  const hasActiveFilters = minScore || maxScore || statusFilter !== "all" || ruleFilter !== "all" || agentFilter !== "all" || directionFilter !== "all" || runFilter !== "all" || dateFrom || dateTo;
 
   const startItem = (page - 1) * pageSize + 1;
   const endItem = Math.min(page * pageSize, total);
@@ -243,6 +248,17 @@ export default function CallsExplorerPage() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
+                  <Label>Direction</Label>
+                  <Select value={directionFilter} onValueChange={(v) => v && setDirectionFilter(v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="inbound">Inbound</SelectItem>
+                      <SelectItem value="outbound">Outbound</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
                   <Label>{t.calls.minScore}</Label>
                   <Input type="number" placeholder="0" value={minScore} onChange={(e) => setMinScore(e.target.value)} />
                 </div>
@@ -302,6 +318,7 @@ export default function CallsExplorerPage() {
                 <TableHead>{t.calls.callId}</TableHead>
                 <TableHead><SortableHeader column="date_time" label={t.calls.dateTime} /></TableHead>
                 <TableHead><SortableHeader column="agent_name" label={t.common.agent} /></TableHead>
+                <TableHead>Direction</TableHead>
                 <TableHead>{t.calls.customerPhone}</TableHead>
                 <TableHead><SortableHeader column="duration" label={t.calls.duration} /></TableHead>
                 <TableHead><SortableHeader column="qa_score" label={t.calls.qaScore} /></TableHead>
@@ -320,6 +337,15 @@ export default function CallsExplorerPage() {
                     {new Date(call.dateTime).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" })}
                   </TableCell>
                   <TableCell>{call.agentName}</TableCell>
+                  <TableCell>
+                    {call.direction === "inbound" ? (
+                      <span className="flex items-center gap-1 text-blue-600 text-xs"><PhoneIncoming className="h-3 w-3" /> In</span>
+                    ) : call.direction === "outbound" ? (
+                      <span className="flex items-center gap-1 text-green-600 text-xs"><PhoneOutgoing className="h-3 w-3" /> Out</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="font-mono text-sm">{call.customerPhone}</TableCell>
                   <TableCell>{formatDuration(call.duration)}</TableCell>
                   <TableCell>
@@ -336,7 +362,7 @@ export default function CallsExplorerPage() {
               ))}
               {!loading && calls.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                     {t.calls.noResults}
                   </TableCell>
                 </TableRow>

@@ -42,6 +42,7 @@ def _parse_info_file(audio_path: str) -> dict:
         "agent_id": "AGT-000",
         "customer_phone": "Unknown",
         "duration": 0,
+        "direction": "unknown",  # inbound | outbound | unknown
     }
 
     # Find the .info file: audio is TELERENTA_123--456_R207-N210_..._date_time.au
@@ -120,6 +121,24 @@ def _parse_info_file(audio_path: str) -> dict:
                     result["duration"] = int(val)
                 except ValueError:
                     pass
+                break
+
+        # Call direction from _CALL_FLOW_=[from]-->[to]
+        # STATION-->EXTERNAL = outbound, EXTERNAL-->STATION = inbound
+        for line in content.splitlines():
+            if line.strip().startswith("_CALL_FLOW_="):
+                flow = line.strip().split("=", 1)[1]
+                # Extract [left]-->[right]
+                flow_match = re.match(r'\[(.+?)\]-->\[(.+?)\]', flow)
+                if flow_match:
+                    left, right = flow_match.group(1), flow_match.group(2)
+                    # If left is a short number (station) and right is external phone
+                    left_is_station = station.get("number") == left
+                    right_is_station = station.get("number") == right
+                    if left_is_station:
+                        result["direction"] = "outbound"
+                    elif right_is_station:
+                        result["direction"] = "inbound"
                 break
 
     except Exception as e:
@@ -408,11 +427,12 @@ class IngestionService:
             _log(self.db, "info", "ingestion",
                  f"{skipped} files already done, {len(pending)} remaining.")
 
-        # Load rules once (shared across all workers)
-        rules_data = [{
+        # Load all enabled rules once (filtered per call by direction later)
+        all_rules_data = [{
             "rule_id": r.rule_id, "title": r.title,
             "description": r.description, "max_score": r.max_score,
             "rule_type": r.rule_type, "is_critical": r.is_critical,
+            "direction": r.direction,
         } for r in self.db.query(QARule).filter(
             QARule.enabled == True
         ).order_by(QARule.sort_order).all()]
@@ -441,7 +461,7 @@ class IngestionService:
                 db = SessionLocal()
                 try:
                     call_id = await self._process_file_with_session(
-                        db, file_path, job_id, source, settings, run.run_id, rules_data
+                        db, file_path, job_id, source, settings, run.run_id, all_rules_data
                     )
                     async with lock:
                         created_ids.append(call_id)
@@ -570,12 +590,13 @@ class IngestionService:
             agent_id=meta["agent_id"],
             customer_phone=meta["customer_phone"],
             duration=duration,
+            direction=meta["direction"],
             status="processing",
             audio_file_path=file_path,
             ingestion_run_id=run_id,
         )
         if meta["agent_name"] != "Unknown":
-            log("info", f"Metadata: agent={meta['agent_name']}, phone={meta['customer_phone']}, duration={duration}s")
+            log("info", f"Metadata: agent={meta['agent_name']}, phone={meta['customer_phone']}, duration={duration}s, direction={meta['direction']}")
         db.add(call)
         db.commit()
 
@@ -586,15 +607,20 @@ class IngestionService:
             ))
         db.commit()
 
-        # 5. LLM analysis
-        log("info", f"Analyzing {call.call_id}...")
+        # 5. LLM analysis — filter rules by call direction
+        call_dir = call.direction or "unknown"
+        filtered_rules = [
+            r for r in rules_data
+            if r["direction"] == "both" or r["direction"] == call_dir
+        ]
+        log("info", f"Analyzing {call.call_id} ({call_dir}), {len(filtered_rules)}/{len(rules_data)} rules...")
         job.progress = 70
         db.commit()
         _broadcast_job(job)
 
         llm = LLMService(settings.llm)
         analysis = await llm.analyze_call(
-            segments, rules_data,
+            segments, filtered_rules,
             log_fn=lambda lvl, src, msg, jid: _log(db, lvl, src, msg, jid),
             job_id=job_id,
         )

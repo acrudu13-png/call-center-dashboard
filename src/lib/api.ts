@@ -50,6 +50,7 @@ export interface CallSummary {
   status: string;
   rulesFailed: string[];
   compliancePass: boolean;
+  direction: string;
 }
 
 export interface CallListResponse {
@@ -103,6 +104,7 @@ export async function fetchCalls(params: {
   minScore?: number;
   maxScore?: number;
   runId?: string;
+  direction?: string;
 } = {}): Promise<CallListResponse> {
   const sp = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
@@ -176,6 +178,10 @@ export async function updateCallStatus(callId: string, status: string) {
   });
 }
 
+export async function deleteCall(callId: string) {
+  return apiFetch(`/api/calls/${callId}`, { method: "DELETE" });
+}
+
 // ── QA Rules ──────────────────────────────────────────────
 
 export interface QARule {
@@ -187,6 +193,7 @@ export interface QARule {
   max_score: number;
   enabled: boolean;
   is_critical: boolean;
+  direction: string;
   sort_order: number;
 }
 

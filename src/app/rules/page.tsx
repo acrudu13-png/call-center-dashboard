@@ -15,6 +15,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -64,6 +71,7 @@ export default function RulesEnginePage() {
         maxScore: r.max_score > 0 ? r.max_score : undefined,
         extractionKey: r.rule_type === "extraction" ? r.rule_id : undefined,
         enabled: r.enabled,
+        direction: r.direction || "both",
         order: r.sort_order,
       })));
     }).catch(() => {});
@@ -88,6 +96,7 @@ export default function RulesEnginePage() {
     sectionEn: "",
     maxScore: 5,
     enabled: true,
+    direction: "both",
     order: rules.length + 1,
   };
 
@@ -339,6 +348,20 @@ export default function RulesEnginePage() {
                     </p>
                   </div>
                 )}
+                <div className="space-y-1.5">
+                  <Label>Directie apel</Label>
+                  <Select
+                    value={editingRule.direction || "both"}
+                    onValueChange={(v) => v && setEditingRule({ ...editingRule, direction: v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="both">Ambele (inbound + outbound)</SelectItem>
+                      <SelectItem value="inbound">Doar inbound</SelectItem>
+                      <SelectItem value="outbound">Doar outbound</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={editingRule.enabled}
@@ -346,7 +369,7 @@ export default function RulesEnginePage() {
                       setEditingRule({ ...editingRule, enabled: v })
                     }
                   />
-                  <Label>Activată</Label>
+                  <Label>Activata</Label>
                 </div>
               </div>
             )}
@@ -477,6 +500,11 @@ export default function RulesEnginePage() {
                             ) : (
                               <Badge variant="secondary" className="text-xs font-mono">
                                 {rule.extractionKey ? `→ ${rule.extractionKey}` : "extract"}
+                              </Badge>
+                            )}
+                            {rule.direction && rule.direction !== "both" && (
+                              <Badge variant="outline" className="text-xs">
+                                {rule.direction === "inbound" ? "IN" : "OUT"}
                               </Badge>
                             )}
                           </div>

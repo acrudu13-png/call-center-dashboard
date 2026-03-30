@@ -34,6 +34,7 @@ class CallSummary(BaseModel):
     status: str
     rulesFailed: list[str]
     compliancePass: bool
+    direction: str = "unknown"
 
     model_config = {"from_attributes": True}
 

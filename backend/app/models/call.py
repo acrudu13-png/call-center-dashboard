@@ -23,6 +23,7 @@ class Call(Base):
     )  # completed | in_review | flagged | processing
     rules_failed: Mapped[list] = mapped_column(JSON, default=list)
     compliance_pass: Mapped[bool] = mapped_column(Boolean, default=True)
+    direction: Mapped[str] = mapped_column(String(10), default="unknown", index=True)  # inbound | outbound | unknown
     audio_file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     ingestion_run_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     raw_json: Mapped[dict] = mapped_column(JSON, default=dict)

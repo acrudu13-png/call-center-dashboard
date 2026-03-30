@@ -59,11 +59,15 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         if not transcript:
             raise HTTPException(status_code=400, detail="No transcript found for this call")
 
-    # Get rules
+    # Get rules — filter by call direction
+    call_dir = call.direction if call else "unknown"
     rules_query = db.query(QARule).filter(QARule.enabled == True)
     if payload.ruleIds:
         rules_query = rules_query.filter(QARule.rule_id.in_(payload.ruleIds))
     rules = rules_query.order_by(QARule.sort_order).all()
+
+    # Filter by direction: "both" applies to all calls, otherwise match direction
+    rules = [r for r in rules if r.direction == "both" or r.direction == call_dir]
 
     rules_data = [
         {
@@ -73,7 +77,7 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         for r in rules
     ]
 
-    _add_log(db, "info", f"Sending {call_label} to AI with {len(rules)} rules")
+    _add_log(db, "info", f"Sending {call_label} ({call_dir}) to AI with {len(rules)} rules")
     await manager.broadcast("log", {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Sending {call_label} to AI with {len(rules)} rules",

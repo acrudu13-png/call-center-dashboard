@@ -54,6 +54,7 @@ export interface QARule {
   maxScore?: number;      // max points for scored rules (undefined for extraction rules)
   extractionKey?: string; // snake_case key for extraction rules (undefined for scored rules)
   enabled: boolean;
+  direction?: string;    // inbound | outbound | both
   order: number;
 }
 

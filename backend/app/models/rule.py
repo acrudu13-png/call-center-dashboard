@@ -18,6 +18,7 @@ class QARule(Base):
     max_score: Mapped[float] = mapped_column(Float, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     is_critical: Mapped[bool] = mapped_column(Boolean, default=False)
+    direction: Mapped[str] = mapped_column(String(10), default="both")  # inbound | outbound | both
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
