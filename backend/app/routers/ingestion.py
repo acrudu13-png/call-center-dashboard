@@ -6,7 +6,7 @@ from typing import Optional
 from app.database import get_db, SessionLocal
 from app.database import utcnow
 from app.services.ingestion_service import IngestionService
-from app.auth import get_current_user
+from app.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/ingestion", tags=["ingestion"], dependencies=[Depends(get_current_user)])
 
@@ -25,6 +25,7 @@ async def _run_ingestion_bg(source: str, remote_path: Optional[str] = None, resu
 async def trigger_ingestion(
     source: str = "sftp",
     remote_path: Optional[str] = None,
+    _user=Depends(require_role("admin", "manager")),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """Manually trigger an ingestion run. Runs in background."""
@@ -33,7 +34,7 @@ async def trigger_ingestion(
 
 
 @router.post("/stop")
-def stop_ingestion(run_id: Optional[str] = None, db: Session = Depends(get_db)):
+def stop_ingestion(run_id: Optional[str] = None, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     """
     Stop a running ingestion.
 
@@ -100,6 +101,7 @@ def _broadcast_run_from_db(run):
 @router.post("/rerun/{run_id}")
 async def rerun_ingestion(
     run_id: str,
+    _user=Depends(require_role("admin", "manager")),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
 ):
@@ -148,7 +150,7 @@ def runs_list(db: Session = Depends(get_db)):
 
 
 @router.delete("/run/{run_id}")
-def delete_run(run_id: str, db: Session = Depends(get_db)):
+def delete_run(run_id: str, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     """Delete a stopped/failed/completed run and its associated jobs and log entries."""
     from app.models.job import IngestionRun, TranscriptionJob, LogEntry
 

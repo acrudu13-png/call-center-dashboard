@@ -19,7 +19,7 @@ from app.schemas.call import (
     TranscriptLineSchema, ScorecardEntrySchema,
 )
 from app.schemas.setting import SftpSettings
-from app.auth import get_current_user
+from app.auth import get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -361,7 +361,7 @@ def get_call(call_id: str, db: Session = Depends(get_db)):
 
 
 @router.patch("/{call_id}/status")
-def update_call_status(call_id: str, status: str, db: Session = Depends(get_db)):
+def update_call_status(call_id: str, status: str, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     call = db.query(Call).filter(
         (Call.id == call_id) | (Call.call_id == call_id)
     ).first()
@@ -375,7 +375,7 @@ def update_call_status(call_id: str, status: str, db: Session = Depends(get_db))
 
 
 @router.delete("/{call_id}")
-def delete_call(call_id: str, db: Session = Depends(get_db)):
+def delete_call(call_id: str, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     call = db.query(Call).filter(
         (Call.id == call_id) | (Call.call_id == call_id)
     ).first()

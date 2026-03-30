@@ -23,12 +23,12 @@ def get_sftp(db: Session = Depends(get_db)):
 
 
 @router.put("/sftp", response_model=SftpSettings)
-def save_sftp(payload: SftpSettings, db: Session = Depends(get_db)):
+def save_sftp(payload: SftpSettings, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     return _save_setting(db, "sftp", payload)
 
 
 @router.post("/sftp/test", response_model=ConnectionTestResult)
-def test_sftp(db: Session = Depends(get_db)):
+def test_sftp(_user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     settings = _get_setting(db, "sftp", SftpSettings)
     svc = SFTPService(settings)
     return svc.test_connection()
@@ -41,12 +41,12 @@ def get_s3(db: Session = Depends(get_db)):
 
 
 @router.put("/s3", response_model=S3Settings)
-def save_s3(payload: S3Settings, db: Session = Depends(get_db)):
+def save_s3(payload: S3Settings, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     return _save_setting(db, "s3", payload)
 
 
 @router.post("/s3/test", response_model=ConnectionTestResult)
-def test_s3(db: Session = Depends(get_db)):
+def test_s3(_user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     settings = _get_setting(db, "s3", S3Settings)
     svc = S3Service(settings)
     return svc.test_connection()
@@ -59,7 +59,7 @@ def get_llm(db: Session = Depends(get_db)):
 
 
 @router.put("/llm", response_model=LlmSettings)
-def save_llm(payload: LlmSettings, db: Session = Depends(get_db)):
+def save_llm(payload: LlmSettings, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     return _save_setting(db, "llm", payload)
 
 
@@ -70,7 +70,7 @@ def get_soniox(db: Session = Depends(get_db)):
 
 
 @router.put("/soniox", response_model=SonioxSettings)
-def save_soniox(payload: SonioxSettings, db: Session = Depends(get_db)):
+def save_soniox(payload: SonioxSettings, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     return _save_setting(db, "soniox", payload)
 
 
@@ -81,12 +81,12 @@ def get_webhook(db: Session = Depends(get_db)):
 
 
 @router.put("/webhook", response_model=WebhookSettings)
-def save_webhook(payload: WebhookSettings, db: Session = Depends(get_db)):
+def save_webhook(payload: WebhookSettings, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     return _save_setting(db, "webhook", payload)
 
 
 @router.post("/webhook/test", response_model=ConnectionTestResult)
-async def test_webhook(db: Session = Depends(get_db)):
+async def test_webhook(_user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     settings = _get_setting(db, "webhook", WebhookSettings)
     svc = WebhookService(settings)
     return await svc.test_endpoint()
@@ -99,7 +99,7 @@ def get_ingest_schedule(db: Session = Depends(get_db)):
 
 
 @router.put("/ingest-schedule", response_model=IngestSchedule)
-def save_ingest_schedule(payload: IngestSchedule, db: Session = Depends(get_db)):
+def save_ingest_schedule(payload: IngestSchedule, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     return _save_setting(db, "ingest_schedule", payload)
 
 
@@ -110,7 +110,7 @@ def get_metadata_mapping(db: Session = Depends(get_db)):
 
 
 @router.put("/metadata-mapping", response_model=MetadataMapping)
-def save_metadata_mapping(payload: MetadataMapping, db: Session = Depends(get_db)):
+def save_metadata_mapping(payload: MetadataMapping, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     return _save_setting(db, "metadata_mapping", payload)
 
 
@@ -121,7 +121,7 @@ def get_main_prompt(db: Session = Depends(get_db)):
 
 
 @router.put("/main-prompt", response_model=MainPrompt)
-def save_main_prompt(payload: MainPrompt, db: Session = Depends(get_db)):
+def save_main_prompt(payload: MainPrompt, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     return _save_setting(db, "main_prompt", payload)
 
 
@@ -132,7 +132,7 @@ def get_call_context(db: Session = Depends(get_db)):
 
 
 @router.put("/call-context", response_model=CallContext)
-def save_call_context(payload: CallContext, db: Session = Depends(get_db)):
+def save_call_context(payload: CallContext, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     return _save_setting(db, "call_context", payload)
 
 
@@ -143,5 +143,5 @@ def get_custom_vocabulary(db: Session = Depends(get_db)):
 
 
 @router.put("/custom-vocabulary", response_model=CustomVocabulary)
-def save_custom_vocabulary(payload: CustomVocabulary, db: Session = Depends(get_db)):
+def save_custom_vocabulary(payload: CustomVocabulary, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     return _save_setting(db, "custom-vocabulary", payload)

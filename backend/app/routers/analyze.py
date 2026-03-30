@@ -10,12 +10,12 @@ from app.schemas.call import AnalyzeRequest, AnalyzeResponse
 from app.schemas.setting import LlmSettings, MainPrompt
 from app.services.llm_service import LLMService
 from app.services.settings_service import get_setting as _get_setting
-from app.auth import get_current_user
+from app.auth import get_current_user, require_role
 from app.ws_manager import manager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/analyze", tags=["analysis"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/analyze", tags=["analysis"], dependencies=[Depends(require_role("admin", "manager"))])
 
 
 def _add_log(db, level: str, message: str):

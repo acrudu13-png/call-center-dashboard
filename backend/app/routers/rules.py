@@ -6,7 +6,7 @@ from app.models.rule import QARule
 from app.schemas.rule import (
     QARuleCreate, QARuleUpdate, QARuleResponse, ReorderRequest,
 )
-from app.auth import get_current_user
+from app.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/rules", tags=["rules"], dependencies=[Depends(get_current_user)])
 
@@ -26,7 +26,7 @@ def list_rules(db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=QARuleResponse, status_code=201)
-def create_rule(payload: QARuleCreate, db: Session = Depends(get_db)):
+def create_rule(payload: QARuleCreate, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     existing = db.query(QARule).filter(QARule.rule_id == payload.rule_id).first()
     if existing:
         raise HTTPException(status_code=409, detail="Rule ID already exists")
@@ -43,7 +43,7 @@ def create_rule(payload: QARuleCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{rule_id}", response_model=QARuleResponse)
-def update_rule(rule_id: str, payload: QARuleUpdate, db: Session = Depends(get_db)):
+def update_rule(rule_id: str, payload: QARuleUpdate, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     rule = db.query(QARule).filter(QARule.rule_id == rule_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -60,7 +60,7 @@ def update_rule(rule_id: str, payload: QARuleUpdate, db: Session = Depends(get_d
 
 
 @router.delete("/{rule_id}")
-def delete_rule(rule_id: str, db: Session = Depends(get_db)):
+def delete_rule(rule_id: str, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     rule = db.query(QARule).filter(QARule.rule_id == rule_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -70,7 +70,7 @@ def delete_rule(rule_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/reorder")
-def reorder_rules(payload: ReorderRequest, db: Session = Depends(get_db)):
+def reorder_rules(payload: ReorderRequest, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     for idx, rule_id in enumerate(payload.rule_ids):
         rule = db.query(QARule).filter(QARule.rule_id == rule_id).first()
         if rule:
