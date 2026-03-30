@@ -387,6 +387,22 @@ def delete_call(call_id: str, db: Session = Depends(get_db)):
 
 
 AUDIO_CACHE_DIR = "/tmp/call_audio_cache"
+AUDIO_CACHE_MAX_AGE = 2 * 24 * 3600  # 2 days in seconds
+
+
+def _cleanup_old_audio_cache():
+    """Delete cached audio files older than AUDIO_CACHE_MAX_AGE."""
+    import time
+    if not os.path.exists(AUDIO_CACHE_DIR):
+        return
+    now = time.time()
+    for f in os.listdir(AUDIO_CACHE_DIR):
+        path = os.path.join(AUDIO_CACHE_DIR, f)
+        try:
+            if os.path.isfile(path) and (now - os.path.getmtime(path)) > AUDIO_CACHE_MAX_AGE:
+                os.remove(path)
+        except OSError:
+            pass
 
 
 @audio_router.get("/{call_id}/audio")
@@ -420,6 +436,7 @@ async def get_call_audio(
         raise HTTPException(status_code=404, detail="No audio file path stored for this call")
 
     os.makedirs(AUDIO_CACHE_DIR, exist_ok=True)
+    _cleanup_old_audio_cache()
 
     # Check cache first (use call id as stable key)
     cache_key = call.call_id or call.id
