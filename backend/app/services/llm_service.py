@@ -27,23 +27,16 @@ Răspunde DOAR cu JSON valid."""
 
 def _build_schema_for_rules(rules: list[dict]) -> dict:
     """Build a JSON schema with a fixed-length results array matching the exact rules."""
-    result_items = []
-    for r in rules:
-        item = {
-            "type": "object",
-            "properties": {
-                "ruleId": {"type": "string", "description": f"Must be exactly: {r['rule_id']}"},
-                "ruleTitle": {"type": "string", "description": f"Must be exactly: {r['title']}"},
-                "passed": {"type": "boolean"},
-                "score": {"type": "number", "description": f"0 to {r['max_score']}"},
-                "maxScore": {"type": "number", "description": f"Must be {r['max_score']}"},
-                "details": {"type": "string", "description": "Short explanation in Romanian"},
-                "extractedValue": {"type": ["string", "null"]},
-            },
-            "required": ["ruleId", "ruleTitle", "passed", "score", "maxScore", "details", "extractedValue"],
-            "additionalProperties": False,
-        }
-        result_items.append(item)
+    total_possible = sum(r["max_score"] for r in rules)
+
+    # Build a detailed description listing every rule with its expected values
+    rules_desc = "\n".join(
+        f"  [{i+1}] ruleId=\"{r['rule_id']}\", ruleTitle=\"{r['title']}\", maxScore={r['max_score']}, type={r['rule_type']}"
+        for i, r in enumerate(rules)
+    )
+
+    rule_ids = [r["rule_id"] for r in rules]
+    rule_max_scores = {r["rule_id"]: r["max_score"] for r in rules}
 
     return {
         "name": "call_analysis",
@@ -51,18 +44,31 @@ def _build_schema_for_rules(rules: list[dict]) -> dict:
         "schema": {
             "type": "object",
             "properties": {
-                "summary": {"type": "string"},
-                "improvementAdvice": {"type": "array", "items": {"type": "string"}},
+                "summary": {"type": "string", "description": "Call summary in Romanian"},
+                "improvementAdvice": {"type": "array", "items": {"type": "string"}, "description": "1-4 improvement suggestions in Romanian"},
                 "grade": {"type": "string", "enum": ["Excelent", "Bun", "Acceptabil", "Slab"]},
-                "overallScore": {"type": "number"},
-                "totalEarned": {"type": "number"},
-                "totalPossible": {"type": "number"},
+                "overallScore": {"type": "number", "description": f"(totalEarned / {total_possible}) * 100"},
+                "totalEarned": {"type": "number", "description": "Sum of all scoring rule scores"},
+                "totalPossible": {"type": "number", "description": f"Must be exactly {total_possible}"},
                 "results": {
                     "type": "array",
-                    "items": result_items[0] if result_items else {"type": "object"},
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "ruleId": {"type": "string", "enum": rule_ids, "description": "Exact rule ID from the list"},
+                            "ruleTitle": {"type": "string"},
+                            "passed": {"type": "boolean", "description": "true if score >= maxScore * 0.6"},
+                            "score": {"type": "number", "description": "0 to maxScore for this rule"},
+                            "maxScore": {"type": "number", "description": f"Must match the rule definition. Values: {rule_max_scores}"},
+                            "details": {"type": "string", "description": "Short explanation in Romanian"},
+                            "extractedValue": {"type": ["string", "null"]},
+                        },
+                        "required": ["ruleId", "ruleTitle", "passed", "score", "maxScore", "details", "extractedValue"],
+                        "additionalProperties": False,
+                    },
                     "minItems": len(rules),
                     "maxItems": len(rules),
-                    "description": f"Exactly {len(rules)} results, one per rule, in the same order as REGULI DE EVALUARE",
+                    "description": f"Exactly {len(rules)} results in order:\n{rules_desc}",
                 },
                 "hasCriticalFailure": {"type": "boolean"},
                 "criticalFailureReason": {"type": ["string", "null"]},
