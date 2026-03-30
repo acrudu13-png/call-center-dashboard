@@ -504,11 +504,48 @@ export default function CallDetailClient({
   );
 }
 
+type DebugTab = "config" | "system" | "prompt" | "schema" | "response";
+
 function LlmDebugPanel({ request, response }: { request?: string | null; response?: string | null }) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"request" | "response">("request");
+  const [tab, setTab] = useState<DebugTab>("config");
 
   if (!request && !response) return null;
+
+  // Parse structured request
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    if (request) parsed = JSON.parse(request);
+  } catch {
+    // old format — plain text
+  }
+
+  const configText = parsed
+    ? `Model: ${parsed.model}\nTemperature: ${parsed.temperature}\nMax tokens: ${parsed.max_tokens}\nMode: ${parsed.mode}`
+    : null;
+  const systemPrompt = parsed ? String(parsed.system_prompt || "") : null;
+  const userMessage = parsed ? String(parsed.user_message || "") : request;
+  const schemaText = parsed?.response_format
+    ? JSON.stringify(parsed.response_format, null, 2)
+    : null;
+
+  // Pretty-print response JSON
+  let responseText = response || "";
+  try {
+    if (response) responseText = JSON.stringify(JSON.parse(response), null, 2);
+  } catch {
+    // keep raw
+  }
+
+  const tabs: { key: DebugTab; label: string; content: string | null }[] = [
+    { key: "config", label: "Config", content: configText },
+    { key: "system", label: "System Prompt", content: systemPrompt },
+    { key: "prompt", label: "User Prompt", content: userMessage },
+    { key: "schema", label: "JSON Schema", content: schemaText },
+    { key: "response", label: "Response", content: responseText },
+  ].filter((t) => t.content) as { key: DebugTab; label: string; content: string }[];
+
+  const activeContent = tabs.find((t) => t.key === tab)?.content || tabs[0]?.content || "No data";
 
   return (
     <Card className="border-dashed border-muted-foreground/30">
@@ -525,25 +562,21 @@ function LlmDebugPanel({ request, response }: { request?: string | null; respons
       </CardHeader>
       {open && (
         <CardContent>
-          <div className="flex gap-2 mb-3">
-            <Button
-              variant={tab === "request" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setTab("request")}
-            >
-              Request ({request ? Math.round(request.length / 1024) : 0} KB)
-            </Button>
-            <Button
-              variant={tab === "response" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setTab("response")}
-            >
-              Response ({response ? Math.round(response.length / 1024) : 0} KB)
-            </Button>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {tabs.map((t) => (
+              <Button
+                key={t.key}
+                variant={tab === t.key ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTab(t.key)}
+              >
+                {t.label}
+              </Button>
+            ))}
           </div>
           <ScrollArea className="h-[500px]">
             <pre className="text-xs font-mono whitespace-pre-wrap break-all bg-muted p-4 rounded-lg">
-              {tab === "request" ? (request || "No request data") : (response || "No response data")}
+              {activeContent}
             </pre>
           </ScrollArea>
         </CardContent>

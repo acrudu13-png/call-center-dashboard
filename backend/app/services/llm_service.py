@@ -259,7 +259,15 @@ class LLMService:
                 })
 
         # Store the full request/response for debugging
-        debug_request = messages[1]["content"]
+        debug_request = json.dumps({
+            "model": self.settings.defaultModel,
+            "temperature": self.settings.temperature,
+            "max_tokens": self.settings.maxTokens,
+            "mode": mode_used,
+            "system_prompt": messages[0]["content"],
+            "user_message": messages[1]["content"],
+            "response_format": dynamic_schema,
+        }, indent=2, ensure_ascii=False)
         debug_response = content
 
         return AnalyzeResponse(
