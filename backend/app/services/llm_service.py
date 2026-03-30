@@ -104,6 +104,7 @@ class LLMService:
         transcript: list[dict],
         rules: list[dict],
         main_prompt: Optional[str] = None,
+        agent_name: Optional[str] = None,
         log_fn=None,
         job_id: Optional[str] = None,
     ) -> AnalyzeResponse:
@@ -146,6 +147,7 @@ class LLMService:
             {
                 "role": "user",
                 "content": (
+                    f"{'AGENT: ' + agent_name + chr(10) + chr(10) if agent_name else ''}"
                     f"REGULI DE EVALUARE ({len(rules)} reguli, totalPossible={total_max}):\n{rules_text}\n\n"
                     f"ORDINEA EXACTĂ a results (trebuie {len(rules)} elemente):\n{results_template}\n\n"
                     f"IMPORTANT: totalPossible TREBUIE să fie exact {total_max}. overallScore = (totalEarned / {total_max}) * 100.\n\n"

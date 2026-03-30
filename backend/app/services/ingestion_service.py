@@ -633,6 +633,7 @@ class IngestionService:
         llm = LLMService(settings.llm)
         analysis = await llm.analyze_call(
             segments, filtered_rules,
+            agent_name=call.agent_name,
             log_fn=lambda lvl, src, msg, jid: _log(db, lvl, src, msg, jid),
             job_id=job_id,
         )

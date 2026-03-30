@@ -90,7 +90,11 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     # Run analysis
     try:
         llm = LLMService(llm_settings)
-        result = await llm.analyze_call(transcript, rules_data, main_prompt=prompt)
+        result = await llm.analyze_call(
+            transcript, rules_data,
+            main_prompt=prompt,
+            agent_name=call.agent_name if call else None,
+        )
     except Exception as e:
         _add_log(db, "error", f"Reanalysis failed for {call_label}: {e}")
         await manager.broadcast("log", {
