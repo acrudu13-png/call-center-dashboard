@@ -519,8 +519,8 @@ export default function CallDetailClient({
       </div>
 
       {/* Info File Panel */}
-      {call.rawJson?.info_file && (
-        <InfoFilePanel content={call.rawJson.info_file as string} />
+      {typeof call.rawJson?.info_file === "string" && call.rawJson.info_file && (
+        <InfoFilePanel content={call.rawJson.info_file} />
       )}
 
       {/* LLM Debug Panel */}
