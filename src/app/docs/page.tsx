@@ -47,9 +47,6 @@ function Section({ children }: { children: React.ReactNode }) {
 }
 
 export default function DocsPage() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
-
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
