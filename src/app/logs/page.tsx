@@ -243,10 +243,10 @@ export default function LogsPage() {
   }, [allJobs]);
 
   const formatTime = (isoString: string) =>
-    new Date(isoString).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    new Date(isoString).toLocaleTimeString("ro-RO", { timeZone: "Europe/Bucharest", hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
   const formatDate = (isoString: string) =>
-    new Date(isoString).toLocaleString("ro-RO", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    new Date(isoString).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
   const getRelativeTime = (isoString: string) => {
     const diff = Date.now() - new Date(isoString).getTime();

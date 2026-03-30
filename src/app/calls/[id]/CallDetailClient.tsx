@@ -40,8 +40,9 @@ import { fetchCall, getAudioUrl, analyzeCall, type CallDetail } from "@/lib/api"
 import { RotateCcw } from "lucide-react";
 
 function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
+  const total = Math.round(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
@@ -248,7 +249,7 @@ export default function CallDetailClient({
                 Înregistrare Apel
               </CardTitle>
               <CardDescription>
-                {new Date(call.dateTime).toLocaleString("ro-RO")} • {formatTime(call.duration)}
+                {new Date(call.dateTime).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" })} • {formatTime(call.duration)}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

@@ -1,3 +1,5 @@
+const TZ = "Europe/Bucharest";
+
 export function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -6,6 +8,7 @@ export function formatDuration(seconds: number): string {
 
 export function formatDate(isoString: string): string {
   return new Date(isoString).toLocaleString("ro-RO", {
+    timeZone: TZ,
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -15,9 +18,16 @@ export function formatDate(isoString: string): string {
 
 export function formatTime(isoString: string): string {
   return new Date(isoString).toLocaleTimeString("ro-RO", {
+    timeZone: TZ,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+  });
+}
+
+export function formatDateTime(isoString: string): string {
+  return new Date(isoString).toLocaleString("ro-RO", {
+    timeZone: TZ,
   });
 }
 

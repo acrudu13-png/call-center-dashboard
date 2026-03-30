@@ -317,7 +317,7 @@ export default function CallsExplorerPage() {
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground whitespace-nowrap">
-                    {new Date(call.dateTime).toLocaleString("ro-RO")}
+                    {new Date(call.dateTime).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" })}
                   </TableCell>
                   <TableCell>{call.agentName}</TableCell>
                   <TableCell className="font-mono text-sm">{call.customerPhone}</TableCell>

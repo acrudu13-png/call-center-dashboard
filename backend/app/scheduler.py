@@ -47,13 +47,16 @@ def start_scheduler():
     finally:
         db.close()
 
+    from app.database import APP_TZ
+
     scheduler.add_job(
         _run_scheduled_ingestion,
         "cron",
         hour=hour,
         minute=0,
+        timezone=APP_TZ,
         id="daily_ingestion",
         replace_existing=True,
     )
     scheduler.start()
-    logger.info(f"Scheduled daily ingestion at {hour:02d}:00")
+    logger.info(f"Scheduled daily ingestion at {hour:02d}:00 (Europe/Bucharest)")

@@ -143,7 +143,7 @@ export default function DashboardPage() {
   };
 
   const formatDate = (isoString: string) =>
-    new Date(isoString).toLocaleString("ro-RO", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    new Date(isoString).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
   if (loading) {
     return (
