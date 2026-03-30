@@ -260,7 +260,7 @@ export default function CallDetailClient({
             </Badge>
           )}
           <GradeBadge grade={grade} />
-          <Badge variant={call.status === "completed" ? "default" : call.status === "flagged" ? "destructive" : "secondary"}>
+          <Badge variant={call.status === "completed" ? "default" : call.status === "flagged" || call.status === "failed" ? "destructive" : "secondary"}>
             {call.status}
           </Badge>
         </div>

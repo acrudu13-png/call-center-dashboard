@@ -367,7 +367,7 @@ def update_call_status(call_id: str, status: str, _user=Depends(require_role("ad
     ).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    if status not in ("completed", "in_review", "flagged", "processing"):
+    if status not in ("completed", "in_review", "flagged", "processing", "failed"):
         raise HTTPException(status_code=400, detail="Invalid status")
     call.status = status
     db.commit()

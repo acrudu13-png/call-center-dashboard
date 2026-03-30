@@ -492,6 +492,17 @@ class IngestionService:
                         db.commit()
                         _broadcast_job(job)
 
+                    # Mark call as failed too
+                    from app.models.call import Call
+                    failed_call = db.query(Call).filter(
+                        Call.audio_file_path == file_path
+                    ).first()
+                    if failed_call and failed_call.status == "processing":
+                        failed_call.status = "failed"
+                        failed_call.is_eligible = False
+                        failed_call.ineligible_reason = f"Eroare procesare: {str(e)[:200]}"
+                        db.commit()
+
                     _log(db, "error", "ingestion", f"Failed {filename}: {e}", job_id)
 
                 finally:
