@@ -582,7 +582,7 @@ export default function LogsPage() {
                 )}
                 {allLogs.map((log, i) => {
                   const config = levelConfig[log.level] || levelConfig.info;
-                  const isLong = log.message.length > 80 || log.level === "error" || log.level === "warn";
+                  const isLong = log.message.length > 120;
                   return (
                     <LogLine
                       key={`${log.id}-${i}`}

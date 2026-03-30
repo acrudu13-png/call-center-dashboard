@@ -355,7 +355,7 @@ export default function CallsExplorerPage() {
                   </TableCell>
                   <TableCell>
                     {!call.isEligible && (
-                      <Badge variant="outline" className="text-xs text-muted-foreground mr-1">N/A</Badge>
+                      <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300 mr-1">N/A</Badge>
                     )}
                     <Badge variant={call.status === "completed" ? "default" : call.status === "flagged" ? "destructive" : "secondary"}>
                       {call.status}

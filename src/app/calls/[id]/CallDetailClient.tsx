@@ -255,7 +255,7 @@ export default function CallDetailClient({
             {call.direction === "inbound" ? "Inbound" : call.direction === "outbound" ? "Outbound" : "—"}
           </Badge>
           {!call.isEligible && (
-            <Badge variant="destructive" className="text-xs">
+            <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300">
               N/A{call.ineligibleReason ? `: ${call.ineligibleReason}` : ""}
             </Badge>
           )}
@@ -328,8 +328,22 @@ export default function CallDetailClient({
             </CardContent>
           </Card>
 
+          {/* Ineligible notice */}
+          {!call.isEligible && (
+            <Card className="border-orange-200 bg-orange-50/50">
+              <CardContent className="pt-6">
+                <p className="text-sm text-orange-700">
+                  {call.ineligibleReason || "Apelul nu este eligibil pentru evaluare QA."}
+                </p>
+                {call.aiSummary && (
+                  <p className="text-sm text-muted-foreground mt-2">{call.aiSummary}</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* AI Summary */}
-          {call.aiSummary && (
+          {call.isEligible && call.aiSummary && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -344,7 +358,7 @@ export default function CallDetailClient({
           )}
 
           {/* Improvement Advice */}
-          {improvementAdvice.length > 0 && (
+          {call.isEligible && improvementAdvice.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -416,57 +430,59 @@ export default function CallDetailClient({
 
         {/* Sidebar: Scorecard + Info */}
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Scorecard QA</CardTitle>
-              <CardDescription>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`text-2xl font-bold ${getScoreColor(overallScore)}`}>{Math.round(overallScore)}%</span>
-                  <GradeBadge grade={grade} />
-                </div>
-                {call.aiTotalEarned !== undefined && call.aiTotalPossible !== undefined && (
-                  <span className="text-xs font-mono text-muted-foreground">
-                    {call.aiTotalEarned}/{call.aiTotalPossible} puncte
-                  </span>
-                )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Progress value={overallScore} className="h-3 mb-4" />
-              <div className="space-y-1">
-                {scoringRules.map((entry) => (
-                  <div key={entry.ruleId} className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50">
-                    {entry.passed ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium">{entry.ruleTitle}</div>
-                      <div className="text-xs text-muted-foreground">{entry.details}</div>
-                    </div>
-                    <span className="text-xs font-mono font-semibold shrink-0">{entry.score}/{entry.maxScore}</span>
+          {call.isEligible && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Scorecard QA</CardTitle>
+                <CardDescription>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`text-2xl font-bold ${getScoreColor(overallScore)}`}>{Math.round(overallScore)}%</span>
+                    <GradeBadge grade={grade} />
                   </div>
-                ))}
-
-                {extractionRules.length > 0 && (
-                  <div className="pt-2 mt-2 border-t">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Extracții</span>
-                    {extractionRules.map((entry) => (
-                      <div key={entry.ruleId} className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50">
-                        <Tag className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium">{entry.ruleTitle}</div>
-                          <div className="text-xs text-muted-foreground">{entry.details}</div>
-                        </div>
-                        <Badge variant="outline" className="text-xs shrink-0">{entry.extractedValue}</Badge>
+                  {call.aiTotalEarned !== undefined && call.aiTotalPossible !== undefined && (
+                    <span className="text-xs font-mono text-muted-foreground">
+                      {call.aiTotalEarned}/{call.aiTotalPossible} puncte
+                    </span>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Progress value={overallScore} className="h-3 mb-4" />
+                <div className="space-y-1">
+                  {scoringRules.map((entry) => (
+                    <div key={entry.ruleId} className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50">
+                      {entry.passed ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium">{entry.ruleTitle}</div>
+                        <div className="text-xs text-muted-foreground">{entry.details}</div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                      <span className="text-xs font-mono font-semibold shrink-0">{entry.score}/{entry.maxScore}</span>
+                    </div>
+                  ))}
+
+                  {extractionRules.length > 0 && (
+                    <div className="pt-2 mt-2 border-t">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Extracții</span>
+                      {extractionRules.map((entry) => (
+                        <div key={entry.ruleId} className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50">
+                          <Tag className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium">{entry.ruleTitle}</div>
+                            <div className="text-xs text-muted-foreground">{entry.details}</div>
+                          </div>
+                          <Badge variant="outline" className="text-xs shrink-0">{entry.extractedValue}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -485,13 +501,15 @@ export default function CallDetailClient({
                 <span className="text-muted-foreground text-sm">Durată</span>
                 <span className="font-medium text-sm">{formatTime(call.duration)}</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm">Scor QA</span>
-                <div className="flex items-center gap-2">
-                  <span className={`font-bold text-sm ${getScoreColor(overallScore)}`}>{Math.round(overallScore)}%</span>
-                  <GradeBadge grade={grade} />
+              {call.isEligible && (
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-sm">Scor QA</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-bold text-sm ${getScoreColor(overallScore)}`}>{Math.round(overallScore)}%</span>
+                    <GradeBadge grade={grade} />
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
 
