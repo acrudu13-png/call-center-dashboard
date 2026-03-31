@@ -700,6 +700,9 @@ class IngestionService:
             call.status = "flagged" if analysis.hasCriticalFailure else "completed"
             call.is_eligible = analysis.isEligible
             call.ineligible_reason = analysis.ineligibleReason
+            rj = call.raw_json or {}
+            rj["speaker_map"] = analysis.speakerMap
+            call.raw_json = rj
             call.llm_request = analysis.llmRequest
             call.llm_response = analysis.llmResponse
 

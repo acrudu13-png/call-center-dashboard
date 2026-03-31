@@ -204,6 +204,12 @@ export default function CallDetailClient({
   const transcript = call.transcript || [];
   const rulesFailed = call.rulesFailed || [];
   const improvementAdvice = call.aiImprovementAdvice || [];
+  const speakerMap = (call.rawJson?.speaker_map || {}) as Record<string, string>;
+
+  const getSpeakerName = (speakerId: string, index: number) => {
+    if (speakerMap[speakerId]) return speakerMap[speakerId];
+    return `${t.callDetail.speaker} ${index + 1}`;
+  };
 
   const speakerIndex: Record<string, number> = {};
   transcript.forEach(({ speaker }) => {
@@ -415,7 +421,7 @@ export default function CallDetailClient({
                     const p = SPEAKER_PALETTE[n % SPEAKER_PALETTE.length];
                     return (
                       <span key={id} className="text-xs px-2 py-0.5 rounded-full font-medium border" style={{ background: p.avatar, borderColor: p.border, color: p.label }}>
-                        {t.callDetail.speaker} {n + 1}
+                        {getSpeakerName(id, n)}
                       </span>
                     );
                   })}
@@ -435,7 +441,7 @@ export default function CallDetailClient({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-xs font-semibold" style={{ color: p.label }}>{t.callDetail.speaker} {n + 1}</span>
+                            <span className="text-xs font-semibold" style={{ color: p.label }}>{getSpeakerName(entry.speaker, n)}</span>
                             <span className="text-xs text-muted-foreground">{formatTime(entry.timestamp)}</span>
                           </div>
                           <p className="text-sm leading-relaxed">{entry.text}</p>
@@ -579,6 +585,7 @@ export default function CallDetailClient({
 }
 
 function InfoFilePanel({ content }: { content: string }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
   if (!content) return null;
@@ -612,6 +619,7 @@ function InfoFilePanel({ content }: { content: string }) {
 type DebugTab = "config" | "system" | "prompt" | "schema" | "response";
 
 function LlmDebugPanel({ request, response }: { request?: string | null; response?: string | null }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<DebugTab>("config");
 

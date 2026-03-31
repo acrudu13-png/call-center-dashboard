@@ -88,5 +88,6 @@ class AnalyzeResponse(BaseModel):
     criticalFailureReason: Optional[str] = None
     isEligible: bool = True
     ineligibleReason: Optional[str] = None
+    speakerMap: dict = {}
     llmRequest: Optional[str] = None
     llmResponse: Optional[str] = None

@@ -119,6 +119,10 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         call.status = "flagged" if result.hasCriticalFailure else "completed"
         call.is_eligible = result.isEligible
         call.ineligible_reason = result.ineligibleReason
+        # Merge speaker map into raw_json
+        rj = call.raw_json or {}
+        rj["speaker_map"] = result.speakerMap
+        call.raw_json = rj
         call.llm_request = result.llmRequest
         call.llm_response = result.llmResponse
 

@@ -20,14 +20,17 @@ REGULI STRICTE:
    - Nu există o interacțiune reală între agent și client
    - Clientul a închis înainte de a vorbi cu agentul
    În aceste cazuri, pune toate scorurile pe 0 și grade="Slab".
-2. Evaluează TOATE regulile — nu sări niciuna.
-3. Returnează regulile în EXACT aceeași ordine.
-4. Folosește EXACT ruleId și ruleTitle furnizate.
-5. Pentru reguli de scoring: score între 0 și maxScore. passed=true dacă score >= maxScore*0.6.
-6. Pentru reguli de extraction: extractedValue = valoarea extrasă, score=0, maxScore=0.
-7. overallScore = (totalEarned / totalPossible) * 100.
-8. grade: "Excelent" >= 90, "Bun" >= 75, "Acceptabil" >= 60, "Slab" < 60.
-9. hasCriticalFailure = true dacă orice regulă critică are passed=false.
+2. Identifică cine este agentul și cine este clientul din transcript.
+   Returnează speakerMap: un obiect care mapează ID-ul vorbitorului (ex: "speaker_0") la numele sau rolul său.
+   Folosește numele agentului furnizat. Pentru client, folosește "Client" sau numele dacă se prezintă.
+3. Evaluează TOATE regulile — nu sări niciuna.
+4. Returnează regulile în EXACT aceeași ordine.
+5. Folosește EXACT ruleId și ruleTitle furnizate.
+6. Pentru reguli de scoring: score între 0 și maxScore. passed=true dacă score >= maxScore*0.6.
+7. Pentru reguli de extraction: extractedValue = valoarea extrasă, score=0, maxScore=0.
+8. overallScore = (totalEarned / totalPossible) * 100.
+9. grade: "Excelent" >= 90, "Bun" >= 75, "Acceptabil" >= 60, "Slab" < 60.
+10. hasCriticalFailure = true dacă orice regulă critică are passed=false.
 
 Răspunde DOAR cu JSON valid."""
 
@@ -81,12 +84,13 @@ def _build_schema_for_rules(rules: list[dict]) -> dict:
                 "criticalFailureReason": {"type": ["string", "null"]},
                 "isEligible": {"type": "boolean", "description": "false if voicemail, too short, no real conversation, or client hung up before talking"},
                 "ineligibleReason": {"type": ["string", "null"], "description": "Reason in Romanian why the call is not eligible for QA evaluation, or null if eligible"},
+                "speakerMap": {"type": "object", "description": "Map speaker IDs to names. E.g. {\"speaker_0\": \"Andra Gabor\", \"speaker_1\": \"Client\"}. Use agent name provided and 'Client' or customer name if identified.", "additionalProperties": {"type": "string"}},
             },
             "required": [
                 "summary", "improvementAdvice", "grade", "overallScore",
                 "totalEarned", "totalPossible", "results",
                 "hasCriticalFailure", "criticalFailureReason",
-                "isEligible", "ineligibleReason",
+                "isEligible", "ineligibleReason", "speakerMap",
             ],
             "additionalProperties": False,
         },
@@ -259,6 +263,8 @@ class LLMService:
             result["isEligible"] = True
         if "ineligibleReason" not in result:
             result["ineligibleReason"] = None
+        if "speakerMap" not in result:
+            result["speakerMap"] = {}
 
         logger.info(f"LLM returned {len(result.get('results', []))} results, grade={result.get('grade')}, score={result.get('overallScore')}")
 
@@ -315,6 +321,7 @@ class LLMService:
             criticalFailureReason=result.get("criticalFailureReason"),
             isEligible=result.get("isEligible", True),
             ineligibleReason=result.get("ineligibleReason"),
+            speakerMap=result.get("speakerMap", {}),
             llmRequest=debug_request,
             llmResponse=debug_response,
         )
