@@ -668,7 +668,7 @@ function LlmDebugPanel({ request, response, classificationDebug }: {
   }
 
   const classificationText = classificationDebug
-    ? `Model: ${classificationDebug.model || "?"}\n\nResult: ${classificationDebug.result || "?"}\n\n--- Request ---\n${classificationDebug.request || ""}\n\n--- Response ---\n${classificationDebug.response || ""}`
+    ? Object.entries(classificationDebug).map(([k, v]) => `--- ${k} ---\n${v}`).join("\n\n")
     : null;
 
   const tabs: { key: DebugTab; label: string; content: string | null }[] = [

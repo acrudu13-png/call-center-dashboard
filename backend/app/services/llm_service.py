@@ -156,13 +156,17 @@ class LLMService:
                         "max_tokens": 50,
                     },
                 )
-                data = response.json()
-                debug["raw_api_response"] = json.dumps(data, ensure_ascii=False)[:500]
+                debug["http_status"] = str(response.status_code)
+                debug["raw_body"] = response.text[:1000]
                 if response.status_code != 200:
-                    debug["response"] = f"HTTP {response.status_code}: {response.text[:300]}"
+                    debug["response"] = f"ERROR HTTP {response.status_code}: {response.text[:500]}"
                     return "other", debug
-                raw_result = (data.get("choices", [{}])[0].get("message", {}).get("content") or "other").strip()
-                debug["response"] = raw_result
+                data = response.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content")
+                debug["response"] = f"content={repr(content)}"
+                if not content:
+                    return "other", debug
+                raw_result = content.strip()
 
                 result = raw_result.lower().strip('"').strip("'").strip()
                 valid_keys = {ct["key"] for ct in call_types}
