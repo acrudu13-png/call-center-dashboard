@@ -325,6 +325,11 @@ export default function CallDetailClient({
               {!audioReady && !audioLoading && (
                 <p className="text-xs text-muted-foreground">Press play to download and listen to the recording</p>
               )}
+              {call.audioFileName && (
+                <p className="text-xs text-muted-foreground font-mono truncate mt-1" title={call.audioFileName}>
+                  {call.audioFileName}
+                </p>
+              )}
             </CardContent>
           </Card>
 

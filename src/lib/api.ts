@@ -90,6 +90,7 @@ export interface CallDetail extends CallSummary {
   hasCriticalFailure: boolean;
   criticalFailureReason?: string;
   rawJson: Record<string, unknown>;
+  audioFileName?: string | null;
   processedAt?: string | null;
   llmRequest?: string | null;
   llmResponse?: string | null;

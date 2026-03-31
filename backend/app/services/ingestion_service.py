@@ -604,7 +604,6 @@ class IngestionService:
         # 4. Parse .info metadata + create call
         meta = _parse_info_file(file_path)
         transcript_duration = int(segments[-1]["timestamp"]) if segments else 0
-        # Prefer .info duration if available, fall back to transcript
         duration = meta["duration"] if meta["duration"] > 0 else transcript_duration
 
         # Parse actual call datetime from filename: ..._2026-03-29_14-50-44.au
