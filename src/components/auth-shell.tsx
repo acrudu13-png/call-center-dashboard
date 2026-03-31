@@ -10,6 +10,35 @@ import { Loader2 } from "lucide-react";
 
 const PUBLIC_PATHS = ["/login"];
 
+// Map URL paths to page keys for permission checking
+const PATH_TO_PAGE_KEY: Record<string, string> = {
+  "/calls": "calls",
+  "/agents": "agents",
+  "/rules": "rules",
+  "/export": "export",
+  "/logs": "logs",
+  "/settings/ingestion": "ingestion",
+  "/settings/ai": "ai",
+  "/settings/webhooks": "webhooks",
+  "/users": "users",
+  "/docs": "docs",
+};
+
+function isPageAllowed(pathname: string, user: { allowed_pages?: string[]; role?: string } | null): boolean {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (!user.allowed_pages?.length) return true; // empty = all pages
+  if (pathname === "/") return true; // dashboard always allowed
+
+  // Check each path prefix
+  for (const [path, key] of Object.entries(PATH_TO_PAGE_KEY)) {
+    if (pathname.startsWith(path)) {
+      return user.allowed_pages.includes(key);
+    }
+  }
+  return true; // unknown paths are allowed
+}
+
 function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const pathname = usePathname();
@@ -30,6 +59,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
       router.replace("/");
     }
   }, [loading, user, isPublicPage, router]);
+
+  // Redirect to dashboard if page not allowed
+  useEffect(() => {
+    if (!loading && user && !isPublicPage && !isPageAllowed(pathname, user)) {
+      router.replace("/");
+    }
+  }, [loading, user, isPublicPage, pathname, router]);
 
   if (loading) {
     return (

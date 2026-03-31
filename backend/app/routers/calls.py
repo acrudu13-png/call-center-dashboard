@@ -319,12 +319,14 @@ def export_calls_csv(
 
 
 @router.get("/{call_id}", response_model=CallDetail)
-def get_call(call_id: str, db: Session = Depends(get_db)):
+def get_call(call_id: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     call = db.query(Call).filter(
         (Call.id == call_id) | (Call.call_id == call_id)
     ).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
+    if current_user.allowed_agents and call.agent_id not in current_user.allowed_agents:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     transcript = [
         TranscriptLineSchema(speaker=t.speaker, timestamp=t.timestamp, text=t.text)
@@ -377,6 +379,8 @@ def update_call_status(call_id: str, status: str, _user=Depends(require_role("ad
     ).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
+    if _user.allowed_agents and call.agent_id not in _user.allowed_agents:
+        raise HTTPException(status_code=403, detail="Access denied")
     if status not in ("completed", "in_review", "flagged", "processing", "failed"):
         raise HTTPException(status_code=400, detail="Invalid status")
     call.status = status
@@ -391,6 +395,8 @@ def delete_call(call_id: str, _user=Depends(require_role("admin", "manager")), d
     ).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
+    if _user.allowed_agents and call.agent_id not in _user.allowed_agents:
+        raise HTTPException(status_code=403, detail="Access denied")
     db.delete(call)  # cascade deletes transcript_lines + scorecard_entries
     db.commit()
     return {"message": f"Call {call.call_id} deleted"}
@@ -442,6 +448,8 @@ async def get_call_audio(
     ).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
+    if user.allowed_agents and call.agent_id not in user.allowed_agents:
+        raise HTTPException(status_code=403, detail="Access denied")
     if not call.audio_file_path:
         raise HTTPException(status_code=404, detail="No audio file path stored for this call")
 
