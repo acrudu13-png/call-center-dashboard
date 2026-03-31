@@ -156,9 +156,12 @@ class LLMService:
                         "max_tokens": 50,
                     },
                 )
-                response.raise_for_status()
                 data = response.json()
-                raw_result = (data["choices"][0]["message"].get("content") or "other").strip()
+                debug["raw_api_response"] = json.dumps(data, ensure_ascii=False)[:500]
+                if response.status_code != 200:
+                    debug["response"] = f"HTTP {response.status_code}: {response.text[:300]}"
+                    return "other", debug
+                raw_result = (data.get("choices", [{}])[0].get("message", {}).get("content") or "other").strip()
                 debug["response"] = raw_result
 
                 result = raw_result.lower().strip('"').strip("'").strip()
