@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Boolean
+from sqlalchemy import String, DateTime, Boolean, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base, utcnow
 
@@ -19,6 +19,8 @@ class User(Base):
         String(20), default="viewer"
     )  # admin | manager | viewer
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    allowed_agents: Mapped[list] = mapped_column(JSON, default=list)  # [] = all agents
+    allowed_pages: Mapped[list] = mapped_column(JSON, default=list)   # [] = all pages
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow, onupdate=utcnow

@@ -18,6 +18,8 @@ interface User {
   full_name: string;
   role: string;
   is_active: boolean;
+  allowed_agents: string[];
+  allowed_pages: string[];
 }
 
 interface AuthContextType {

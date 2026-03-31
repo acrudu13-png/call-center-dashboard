@@ -41,7 +41,8 @@ import {
   PhoneIncoming,
   PhoneOutgoing,
 } from "lucide-react";
-import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, type CallSummary, type QARule, type IngestionRunListItem } from "@/lib/api";
+import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, bulkReanalyze, type CallSummary, type QARule, type IngestionRunListItem } from "@/lib/api";
+import { RotateCcw } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
 function formatDuration(seconds: number) {
@@ -78,6 +79,7 @@ export default function CallsExplorerPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [bulkAnalyzing, setBulkAnalyzing] = useState(false);
   const [rules, setRules] = useState<QARule[]>([]);
 
   function getQAStatus(score: number): "Passed" | "Average" | "Failed" {
@@ -171,14 +173,46 @@ export default function CallsExplorerPage() {
 
   const hasActiveFilters = minScore || maxScore || statusFilter !== "all" || ruleFilter !== "all" || agentFilter !== "all" || directionFilter !== "all" || runFilter !== "all" || dateFrom || dateTo;
 
+  const handleBulkReanalyze = async () => {
+    const msg = hasActiveFilters
+      ? `Reanaliza ${total} apeluri filtrate?`
+      : `Reanaliza TOATE cele ${total} apeluri?`;
+    if (!confirm(msg)) return;
+    setBulkAnalyzing(true);
+    try {
+      const statusMap: Record<string, string> = { Passed: "completed", Failed: "flagged" };
+      await bulkReanalyze({
+        status: statusFilter !== "all" ? statusMap[statusFilter] || statusFilter : undefined,
+        agentId: agentFilter !== "all" ? agentFilter : undefined,
+        search: search || undefined,
+        minScore: minScore ? Number(minScore) : undefined,
+        maxScore: maxScore ? Number(maxScore) : undefined,
+        runId: runFilter !== "all" ? runFilter : undefined,
+        direction: directionFilter !== "all" ? directionFilter : undefined,
+      });
+    } catch (e) {
+      console.error("Bulk reanalyze failed:", e);
+    } finally {
+      setBulkAnalyzing(false);
+    }
+  };
+
   const startItem = (page - 1) * pageSize + 1;
   const endItem = Math.min(page * pageSize, total);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">{t.calls.title}</h1>
-        <p className="text-muted-foreground">{t.calls.subtitle}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t.calls.title}</h1>
+          <p className="text-muted-foreground">{t.calls.subtitle}</p>
+        </div>
+        {total > 0 && (
+          <Button variant="outline" size="sm" onClick={handleBulkReanalyze} disabled={bulkAnalyzing}>
+            {bulkAnalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
+            {bulkAnalyzing ? "Se analizeaza..." : hasActiveFilters ? `Reanalizeaza ${total} filtrate` : `Reanalizeaza toate (${total})`}
+          </Button>
+        )}
       </div>
 
       {/* Search & Filter Bar */}

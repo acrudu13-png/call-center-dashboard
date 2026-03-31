@@ -16,6 +16,15 @@ from app.auth import (
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+def _user_response(u: User) -> UserResponse:
+    return UserResponse(
+        id=u.id, username=u.username, email=u.email,
+        full_name=u.full_name, role=u.role, is_active=u.is_active,
+        allowed_agents=u.allowed_agents or [],
+        allowed_pages=u.allowed_pages or [],
+    )
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == body.username).first()
@@ -60,6 +69,8 @@ def get_me(user: User = Depends(get_current_user)):
         full_name=user.full_name,
         role=user.role,
         is_active=user.is_active,
+        allowed_agents=user.allowed_agents or [],
+        allowed_pages=user.allowed_pages or [],
     )
 
 
@@ -86,10 +97,7 @@ def list_users(
     users = db.query(User).order_by(User.username).all()
     return UserListResponse(
         users=[
-            UserResponse(
-                id=u.id, username=u.username, email=u.email,
-                full_name=u.full_name, role=u.role, is_active=u.is_active,
-            )
+            _user_response(u)
             for u in users
         ],
         total=len(users),
@@ -115,14 +123,13 @@ def create_user(
         hashed_password=hash_password(body.password),
         full_name=body.full_name,
         role=body.role,
+        allowed_agents=body.allowed_agents,
+        allowed_pages=body.allowed_pages,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    return UserResponse(
-        id=user.id, username=user.username, email=user.email,
-        full_name=user.full_name, role=user.role, is_active=user.is_active,
-    )
+    return _user_response(user)
 
 
 @router.put("/users/{user_id}", response_model=UserResponse)
@@ -145,12 +152,13 @@ def update_user(
         user.role = body.role
     if body.is_active is not None:
         user.is_active = body.is_active
+    if body.allowed_agents is not None:
+        user.allowed_agents = body.allowed_agents
+    if body.allowed_pages is not None:
+        user.allowed_pages = body.allowed_pages
     db.commit()
     db.refresh(user)
-    return UserResponse(
-        id=user.id, username=user.username, email=user.email,
-        full_name=user.full_name, role=user.role, is_active=user.is_active,
-    )
+    return _user_response(user)
 
 
 @router.delete("/users/{user_id}")

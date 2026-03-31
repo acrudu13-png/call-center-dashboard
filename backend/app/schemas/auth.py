@@ -8,6 +8,8 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=8)
     full_name: str = ""
     role: str = "viewer"
+    allowed_agents: list[str] = []   # [] = all agents
+    allowed_pages: list[str] = []    # [] = all pages
 
     @field_validator("password")
     @classmethod
@@ -24,6 +26,8 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
+    allowed_agents: Optional[list[str]] = None
+    allowed_pages: Optional[list[str]] = None
 
 
 class ChangePassword(BaseModel):
@@ -53,6 +57,8 @@ class UserResponse(BaseModel):
     full_name: str
     role: str
     is_active: bool
+    allowed_agents: list[str] = []
+    allowed_pages: list[str] = []
 
 
 class UserListResponse(BaseModel):

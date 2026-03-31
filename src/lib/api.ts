@@ -314,6 +314,22 @@ export async function analyzeCall(params: {
   });
 }
 
+export async function bulkReanalyze(params: {
+  status?: string;
+  agentId?: string;
+  search?: string;
+  minScore?: number;
+  maxScore?: number;
+  runId?: string;
+  direction?: string;
+} = {}): Promise<{ message: string; total: number }> {
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") sp.set(k, String(v));
+  });
+  return apiFetch(`/api/analyze/bulk?${sp.toString()}`, { method: "POST" });
+}
+
 // ── Ingestion ─────────────────────────────────────────────
 
 export async function triggerIngestion(source: string = "sftp", remotePath?: string) {
@@ -409,6 +425,8 @@ export interface UserInfo {
   full_name: string;
   role: string;
   is_active: boolean;
+  allowed_agents: string[];
+  allowed_pages: string[];
 }
 
 export async function fetchUsers(): Promise<{ users: UserInfo[]; total: number }> {
@@ -421,6 +439,8 @@ export async function createUser(data: {
   password: string;
   full_name?: string;
   role?: string;
+  allowed_agents?: string[];
+  allowed_pages?: string[];
 }): Promise<UserInfo> {
   return apiFetch("/api/auth/users", {
     method: "POST",
@@ -433,6 +453,8 @@ export async function updateUser(userId: string, data: {
   full_name?: string;
   role?: string;
   is_active?: boolean;
+  allowed_agents?: string[];
+  allowed_pages?: string[];
 }): Promise<UserInfo> {
   return apiFetch(`/api/auth/users/${userId}`, {
     method: "PUT",

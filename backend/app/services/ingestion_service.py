@@ -459,12 +459,13 @@ class IngestionService:
                     return
 
                 filename = os.path.basename(file_path)
-                job_id = f"JOB-{uuid.uuid4().hex[:8].upper()}"
                 last_error = None
 
                 for attempt in range(1, MAX_RETRIES + 1):
                     if self._stop.is_set():
                         return
+
+                    job_id = f"JOB-{uuid.uuid4().hex[:8].upper()}"
 
                     # Each attempt gets its own DB session
                     db = SessionLocal()

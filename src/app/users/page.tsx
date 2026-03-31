@@ -47,12 +47,25 @@ import {
 } from "lucide-react";
 import {
   fetchUsers,
+  fetchAgents,
   createUser,
   updateUser,
   deleteUser,
   type UserInfo,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+
+const ALL_PAGES = [
+  { key: "calls", label: "Apeluri" },
+  { key: "agents", label: "Agenti" },
+  { key: "rules", label: "Reguli QA" },
+  { key: "export", label: "Export" },
+  { key: "logs", label: "Loguri & Monitorizare" },
+  { key: "ingestion", label: "Ingestie date" },
+  { key: "ai", label: "AI & Transcriere" },
+  { key: "webhooks", label: "Export & Webhook-uri" },
+  { key: "docs", label: "Documentatie" },
+];
 
 const ROLE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   admin: { label: "Admin", icon: ShieldCheck, color: "text-red-600" },
@@ -78,11 +91,17 @@ export default function UsersPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState("viewer");
+  const [allowedAgents, setAllowedAgents] = useState<string[]>([]);
+  const [allowedPages, setAllowedPages] = useState<string[]>([]);
+
+  // Available agents
+  const [agents, setAgents] = useState<{ agentId: string; agentName: string }[]>([]);
 
   const loadUsers = useCallback(async () => {
     try {
-      const res = await fetchUsers();
+      const [res, agentRes] = await Promise.all([fetchUsers(), fetchAgents()]);
       setUsers(res.users);
+      setAgents(agentRes);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load users");
     } finally {
@@ -101,6 +120,8 @@ export default function UsersPage() {
     setPassword("");
     setFullName("");
     setRole("viewer");
+    setAllowedAgents([]);
+    setAllowedPages([]);
     setFormError(null);
     setDialogOpen(true);
   };
@@ -112,6 +133,8 @@ export default function UsersPage() {
     setPassword("");
     setFullName(u.full_name);
     setRole(u.role);
+    setAllowedAgents(u.allowed_agents || []);
+    setAllowedPages(u.allowed_pages || []);
     setFormError(null);
     setDialogOpen(true);
   };
@@ -125,6 +148,8 @@ export default function UsersPage() {
           email,
           full_name: fullName,
           role,
+          allowed_agents: allowedAgents,
+          allowed_pages: allowedPages,
         });
       } else {
         if (!username || !email || !password) {
@@ -138,6 +163,8 @@ export default function UsersPage() {
           password,
           full_name: fullName,
           role,
+          allowed_agents: allowedAgents,
+          allowed_pages: allowedPages,
         });
       }
       setDialogOpen(false);
@@ -232,6 +259,7 @@ export default function UsersPage() {
                 <TableHead>Nume complet</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Rol</TableHead>
+                <TableHead>Restrictii</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead></TableHead>
               </TableRow>
@@ -254,6 +282,15 @@ export default function UsersPage() {
                         <Icon className="h-3 w-3" />
                         {cfg.label}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {u.allowed_agents?.length > 0 && (
+                        <span>{u.allowed_agents.length} agent(i)</span>
+                      )}
+                      {u.allowed_pages?.length > 0 && (
+                        <span className={u.allowed_agents?.length ? " ml-1" : ""}>{u.allowed_pages.length} pagin(i)</span>
+                      )}
+                      {!u.allowed_agents?.length && !u.allowed_pages?.length && "Acces complet"}
                     </TableCell>
                     <TableCell>
                       <Switch
@@ -343,6 +380,74 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Agent restrictions */}
+            {role !== "admin" && (
+              <div className="space-y-1.5 pt-3 border-t">
+                <Label>Agenti permisi</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Selectati agentii vizibili. Gol = toti agentii.
+                </p>
+                <div className="grid grid-cols-2 gap-1.5 max-h-[150px] overflow-y-auto">
+                  {agents.map((a) => (
+                    <label key={a.agentId} className="flex items-center gap-2 text-sm cursor-pointer p-1.5 rounded hover:bg-muted">
+                      <input
+                        type="checkbox"
+                        checked={allowedAgents.includes(a.agentId)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAllowedAgents([...allowedAgents, a.agentId]);
+                          } else {
+                            setAllowedAgents(allowedAgents.filter((id) => id !== a.agentId));
+                          }
+                        }}
+                        className="rounded"
+                      />
+                      {a.agentName}
+                    </label>
+                  ))}
+                </div>
+                {allowedAgents.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setAllowedAgents([])} className="text-xs">
+                    Sterge selectia (toti agentii)
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Page restrictions */}
+            {role !== "admin" && (
+              <div className="space-y-1.5 pt-3 border-t">
+                <Label>Pagini permise</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Selectati paginile vizibile. Gol = toate paginile.
+                </p>
+                <div className="grid grid-cols-2 gap-1.5 max-h-[150px] overflow-y-auto">
+                  {ALL_PAGES.map((p) => (
+                    <label key={p.key} className="flex items-center gap-2 text-sm cursor-pointer p-1.5 rounded hover:bg-muted">
+                      <input
+                        type="checkbox"
+                        checked={allowedPages.includes(p.key)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAllowedPages([...allowedPages, p.key]);
+                          } else {
+                            setAllowedPages(allowedPages.filter((k) => k !== p.key));
+                          }
+                        }}
+                        className="rounded"
+                      />
+                      {p.label}
+                    </label>
+                  ))}
+                </div>
+                {allowedPages.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setAllowedPages([])} className="text-xs">
+                    Sterge selectia (toate paginile)
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Anuleaza</Button>

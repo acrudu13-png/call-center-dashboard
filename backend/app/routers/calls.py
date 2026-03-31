@@ -25,6 +25,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/calls", tags=["calls"], dependencies=[Depends(get_current_user)])
 
+
+def _filter_by_user_agents(query, user):
+    """Restrict query to user's allowed agents. Empty list = all agents."""
+    if user and user.allowed_agents:
+        query = query.filter(Call.agent_id.in_(user.allowed_agents))
+    return query
+
 # Separate router for audio (uses query-param token auth instead of header)
 audio_router = APIRouter(prefix="/api/calls", tags=["calls"])
 
@@ -61,9 +68,11 @@ def list_calls(
     maxScore: Optional[float] = None,
     runId: Optional[str] = None,
     direction: Optional[str] = None,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     query = db.query(Call)
+    query = _filter_by_user_agents(query, current_user)
 
     # Filters
     if status:
@@ -116,14 +125,15 @@ def list_calls(
 
 
 @router.get("/stats")
-def call_stats(db: Session = Depends(get_db)):
+def call_stats(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     """Dashboard statistics — excludes ineligible calls from score/compliance metrics."""
-    eligible = db.query(Call).filter(Call.is_eligible == True)
-    total = db.query(Call).count()
-    completed = db.query(Call).filter(Call.status == "completed").count()
-    flagged = db.query(Call).filter(Call.status == "flagged").count()
-    in_review = db.query(Call).filter(Call.status == "in_review").count()
-    processing = db.query(Call).filter(Call.status == "processing").count()
+    base = _filter_by_user_agents(db.query(Call), current_user)
+    eligible = base.filter(Call.is_eligible == True)
+    total = base.count()
+    completed = base.filter(Call.status == "completed").count()
+    flagged = base.filter(Call.status == "flagged").count()
+    in_review = base.filter(Call.status == "in_review").count()
+    processing = base.filter(Call.status == "processing").count()
 
     eligible_done = eligible.filter(Call.status != "processing").count() or 1
     avg_score = eligible.filter(Call.status != "processing").with_entities(func.avg(Call.qa_score)).scalar() or 0
@@ -145,14 +155,12 @@ def call_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/agents")
-def list_agents(db: Session = Depends(get_db)):
+def list_agents(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     """Get unique agent list with call counts."""
-    results = (
-        db.query(Call.agent_id, Call.agent_name, func.count(Call.id).label("callCount"))
-        .group_by(Call.agent_id, Call.agent_name)
-        .order_by(Call.agent_name)
-        .all()
-    )
+    query = db.query(Call.agent_id, Call.agent_name, func.count(Call.id).label("callCount"))
+    if current_user.allowed_agents:
+        query = query.filter(Call.agent_id.in_(current_user.allowed_agents))
+    results = query.group_by(Call.agent_id, Call.agent_name).order_by(Call.agent_name).all()
     return [
         {"agentId": r.agent_id, "agentName": r.agent_name, "callCount": r.callCount}
         for r in results
@@ -160,12 +168,11 @@ def list_agents(db: Session = Depends(get_db)):
 
 
 @router.get("/agents/stats")
-def agent_stats(db: Session = Depends(get_db)):
+def agent_stats(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     """Per-agent performance statistics for the Agents Hub."""
     from sqlalchemy import case, and_
 
-    results = (
-        db.query(
+    query = db.query(
             Call.agent_id,
             Call.agent_name,
             func.count(Call.id).label("total_calls"),
@@ -180,7 +187,10 @@ def agent_stats(db: Session = Depends(get_db)):
             func.sum(case((and_(Call.qa_score >= 70, Call.qa_score < 85), 1), else_=0)).label("good_count"),
             func.sum(case((Call.qa_score < 70, 1), else_=0)).label("poor_count"),
         )
-        .filter(Call.status != "processing", Call.is_eligible == True)
+    if current_user.allowed_agents:
+        query = query.filter(Call.agent_id.in_(current_user.allowed_agents))
+    results = (
+        query.filter(Call.status != "processing", Call.is_eligible == True)
         .group_by(Call.agent_id, Call.agent_name)
         .order_by(Call.agent_name)
         .all()

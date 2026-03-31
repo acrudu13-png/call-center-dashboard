@@ -78,7 +78,12 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 flex flex-col py-4 gap-1 px-2 overflow-y-auto overflow-x-hidden">
-        {navItems.map((item) => {
+        {navItems.filter((item) => {
+          // If user has allowed_pages set, only show those pages (+ dashboard always)
+          if (!user?.allowed_pages?.length) return true;
+          if (item.key === "dashboard") return true;
+          return user.allowed_pages.includes(item.key);
+        }).map((item) => {
           const isActive =
             pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(item.href));
