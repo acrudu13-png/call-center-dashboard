@@ -204,17 +204,9 @@ export default function CallsExplorerPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t.calls.title}</h1>
-          <p className="text-muted-foreground">{t.calls.subtitle}</p>
-        </div>
-        {total > 0 && (
-          <Button variant="outline" size="sm" onClick={handleBulkReanalyze} disabled={bulkAnalyzing}>
-            {bulkAnalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
-            {bulkAnalyzing ? "Se analizeaza..." : hasActiveFilters ? `Reanalizeaza ${total} filtrate` : `Reanalizeaza toate (${total})`}
-          </Button>
-        )}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">{t.calls.title}</h1>
+        <p className="text-muted-foreground">{t.calls.subtitle}</p>
       </div>
 
       {/* Search & Filter Bar */}
@@ -447,6 +439,16 @@ export default function CallsExplorerPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Bulk reanalyze */}
+      {total > 0 && (
+        <div className="flex justify-end pt-2">
+          <Button variant="outline" size="sm" onClick={handleBulkReanalyze} disabled={bulkAnalyzing}>
+            {bulkAnalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
+            {bulkAnalyzing ? "Se analizeaza..." : hasActiveFilters ? `Reanalizeaza ${total} filtrate` : `Reanalizeaza toate (${total})`}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -674,8 +674,13 @@ class IngestionService:
 
             if types_data:
                 llm_cls = LLMService(settings.llm)
-                classified_type = await llm_cls.classify_call(segments, types_data, agent_name=call.agent_name)
+                classified_type, cls_debug = await llm_cls.classify_call(segments, types_data, agent_name=call.agent_name)
                 call.call_type = classified_type
+                from sqlalchemy.orm.attributes import flag_modified
+                rj = dict(call.raw_json or {})
+                rj["classification_debug"] = cls_debug
+                call.raw_json = rj
+                flag_modified(call, "raw_json")
                 db.commit()
                 log("info", f"Classified {call.call_id} as: {classified_type}")
             else:

@@ -75,8 +75,13 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).order_by(CallTypeModel.sort_order).all()
     types_data = [{"key": ct.key, "name": ct.name, "description": ct.description} for ct in active_types]
     if types_data and call:
-        call_type_key = await llm.classify_call(transcript, types_data, agent_name=call.agent_name)
+        call_type_key, cls_debug = await llm.classify_call(transcript, types_data, agent_name=call.agent_name)
         call.call_type = call_type_key
+        from sqlalchemy.orm.attributes import flag_modified
+        rj = dict(call.raw_json or {})
+        rj["classification_debug"] = cls_debug
+        call.raw_json = rj
+        flag_modified(call, "raw_json")
         db.commit()
         _add_log(db, "info", f"Classified {call_label} as: {call_type_key}")
 

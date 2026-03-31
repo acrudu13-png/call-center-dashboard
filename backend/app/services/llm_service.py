@@ -108,31 +108,36 @@ class LLMService:
         transcript: list[dict],
         call_types: list[dict],
         agent_name: Optional[str] = None,
-    ) -> str:
-        """Classify the call type based on transcript. Returns the call type key."""
+    ) -> tuple[str, dict]:
+        """Classify the call type. Returns (key, debug_info)."""
+        debug = {"model": "openai/gpt-5-nano", "request": "", "response": "", "result": "other"}
+
         if not self.settings.openRouterApiKey or not call_types:
-            return "other"
+            return "other", debug
 
         types_text = "\n".join(
             f"- {ct['key']}: {ct['name']} — {ct['description']}"
             for ct in call_types
         )
 
-        # Use only first 30 lines of transcript for speed
         short_transcript = "\n".join(
             f"[{seg['timestamp']:.1f}s] {seg['speaker']}: {seg['text']}"
             for seg in transcript[:30]
         )
 
+        prompt = (
+            f"{'AGENT: ' + agent_name + chr(10) if agent_name else ''}"
+            f"TIPURI DISPONIBILE:\n{types_text}\n\n"
+            f"TRANSCRIPT (primele linii):\n{short_transcript}\n\n"
+            f"Raspunde DOAR cu cheia tipului (ex: customer_support, sales, debt_collection, etc.):"
+        )
+
         messages = [
             {"role": "system", "content": "Clasifici tipul apelului telefonic. Raspunde DOAR cu cheia tipului, nimic altceva."},
-            {"role": "user", "content": (
-                f"{'AGENT: ' + agent_name + chr(10) if agent_name else ''}"
-                f"TIPURI DISPONIBILE:\n{types_text}\n\n"
-                f"TRANSCRIPT (primele linii):\n{short_transcript}\n\n"
-                f"Raspunde DOAR cu cheia tipului (ex: customer_support, sales, debt_collection, etc.):"
-            )},
+            {"role": "user", "content": prompt},
         ]
+
+        debug["request"] = prompt
 
         headers = {
             "Authorization": f"Bearer {self.settings.openRouterApiKey}",
@@ -153,20 +158,24 @@ class LLMService:
                 )
                 response.raise_for_status()
                 data = response.json()
-                result = data["choices"][0]["message"]["content"].strip().lower()
-                # Clean up — extract just the key
-                result = result.strip('"').strip("'").strip()
+                raw_result = data["choices"][0]["message"]["content"].strip()
+                debug["response"] = raw_result
+
+                result = raw_result.lower().strip('"').strip("'").strip()
                 valid_keys = {ct["key"] for ct in call_types}
                 if result in valid_keys:
-                    return result
-                # Try to find a match in the response
+                    debug["result"] = result
+                    return result, debug
                 for key in valid_keys:
                     if key in result:
-                        return key
-                return "other"
+                        debug["result"] = key
+                        return key, debug
+                debug["result"] = "other"
+                return "other", debug
         except Exception as e:
             logger.warning(f"Call classification failed: {e}, defaulting to 'other'")
-            return "other"
+            debug["response"] = str(e)
+            return "other", debug
 
     async def analyze_call(
         self,

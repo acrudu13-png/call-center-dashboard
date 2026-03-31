@@ -586,8 +586,12 @@ export default function CallDetailClient({
       )}
 
       {/* LLM Debug Panel */}
-      {(call.llmRequest || call.llmResponse) && (
-        <LlmDebugPanel request={call.llmRequest} response={call.llmResponse} />
+      {(call.llmRequest || call.llmResponse || !!call.rawJson?.classification_debug) && (
+        <LlmDebugPanel
+          request={call.llmRequest}
+          response={call.llmResponse}
+          classificationDebug={(call.rawJson?.classification_debug || null) as Record<string, string> | null}
+        />
       )}
     </div>
   );
@@ -625,14 +629,18 @@ function InfoFilePanel({ content }: { content: string }) {
   );
 }
 
-type DebugTab = "config" | "system" | "prompt" | "schema" | "response";
+type DebugTab = "classification" | "config" | "system" | "prompt" | "schema" | "response";
 
-function LlmDebugPanel({ request, response }: { request?: string | null; response?: string | null }) {
+function LlmDebugPanel({ request, response, classificationDebug }: {
+  request?: string | null;
+  response?: string | null;
+  classificationDebug?: Record<string, string> | null;
+}) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<DebugTab>("config");
+  const [tab, setTab] = useState<DebugTab>(classificationDebug ? "classification" : "config");
 
-  if (!request && !response) return null;
+  if (!request && !response && !classificationDebug) return null;
 
   // Parse structured request
   let parsed: Record<string, unknown> | null = null;
@@ -659,7 +667,12 @@ function LlmDebugPanel({ request, response }: { request?: string | null; respons
     // keep raw
   }
 
+  const classificationText = classificationDebug
+    ? `Model: ${classificationDebug.model || "?"}\n\nResult: ${classificationDebug.result || "?"}\n\n--- Request ---\n${classificationDebug.request || ""}\n\n--- Response ---\n${classificationDebug.response || ""}`
+    : null;
+
   const tabs: { key: DebugTab; label: string; content: string | null }[] = [
+    { key: "classification", label: "Classification", content: classificationText },
     { key: "config", label: "Config", content: configText },
     { key: "system", label: "System Prompt", content: systemPrompt },
     { key: "prompt", label: "User Prompt", content: userMessage },
