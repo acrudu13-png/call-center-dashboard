@@ -54,6 +54,7 @@ import {
   type UserInfo,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useTranslation } from "@/lib/i18n";
 
 const ALL_PAGES = [
   { key: "calls", label: "Apeluri" },
@@ -75,6 +76,7 @@ const ROLE_CONFIG: Record<string, { label: string; icon: React.ElementType; colo
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
+  const { t } = useTranslation();
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -247,11 +249,11 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Utilizatori</h1>
-          <p className="text-muted-foreground">Gestionarea conturilor de acces.</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t.users.title}</h1>
+          <p className="text-muted-foreground">{t.users.subtitle}</p>
         </div>
         <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" /> Utilizator nou
+          <Plus className="h-4 w-4" /> {t.users.newUser}
         </Button>
       </div>
 
@@ -279,19 +281,19 @@ export default function UsersPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            Toti utilizatorii ({users.length})
+            {t.users.allUsers} ({users.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Utilizator</TableHead>
-                <TableHead>Nume complet</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Rol</TableHead>
-                <TableHead>Restrictii</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>{t.users.username}</TableHead>
+                <TableHead>{t.users.fullName}</TableHead>
+                <TableHead>{t.users.email}</TableHead>
+                <TableHead>{t.users.role}</TableHead>
+                <TableHead>{t.users.restrictions}</TableHead>
+                <TableHead>{t.users.statusLabel}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -304,7 +306,7 @@ export default function UsersPage() {
                   <TableRow key={u.id} className={!u.is_active ? "opacity-50" : ""}>
                     <TableCell className="font-medium">
                       {u.username}
-                      {isMe && <Badge variant="secondary" className="ml-2 text-xs">Tu</Badge>}
+                      {isMe && <Badge variant="secondary" className="ml-2 text-xs">{t.users.you}</Badge>}
                     </TableCell>
                     <TableCell>{u.full_name || "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{u.email}</TableCell>
@@ -321,7 +323,7 @@ export default function UsersPage() {
                       {u.allowed_pages?.length > 0 && (
                         <span className={u.allowed_agents?.length ? " ml-1" : ""}>{u.allowed_pages.length} pagin(i)</span>
                       )}
-                      {!u.allowed_agents?.length && !u.allowed_pages?.length && "Acces complet"}
+                      {!u.allowed_agents?.length && !u.allowed_pages?.length && t.users.fullAccess}
                     </TableCell>
                     <TableCell>
                       <Switch
@@ -354,7 +356,7 @@ export default function UsersPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingUser ? "Editare utilizator" : "Utilizator nou"}</DialogTitle>
+            <DialogTitle>{editingUser ? t.users.editUser : t.users.newUser}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             {formError && (
@@ -368,7 +370,7 @@ export default function UsersPage() {
               </div>
             )}
             <div className="space-y-1.5">
-              <Label>Username</Label>
+              <Label>{t.users.username}</Label>
               <Input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -377,7 +379,7 @@ export default function UsersPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Nume complet</Label>
+              <Label>{t.users.fullName}</Label>
               <Input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -385,7 +387,7 @@ export default function UsersPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Email</Label>
+              <Label>{t.users.email}</Label>
               <Input
                 type="email"
                 value={email}
@@ -395,17 +397,17 @@ export default function UsersPage() {
             </div>
             {!editingUser && (
               <div className="space-y-1.5">
-                <Label>Parola</Label>
+                <Label>{t.users.password}</Label>
                 <Input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Minim 8 caractere, 1 majuscula, 1 cifra"
+                  placeholder={t.users.passwordHint}
                 />
               </div>
             )}
             <div className="space-y-1.5">
-              <Label>Rol</Label>
+              <Label>{t.users.role}</Label>
               <Select value={role} onValueChange={(v) => v && setRole(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent className="min-w-[350px]">
@@ -419,9 +421,9 @@ export default function UsersPage() {
             {/* Agent restrictions */}
             {role !== "admin" && (
               <div className="space-y-1.5 pt-3 border-t">
-                <Label>Agenti permisi</Label>
+                <Label>{t.users.allowedAgents}</Label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Selectati agentii vizibili. Gol = toti agentii.
+                  {t.users.allowedAgentsDesc}
                 </p>
                 <div className="grid grid-cols-2 gap-1.5 max-h-[150px] overflow-y-auto">
                   {agents.map((a) => (
@@ -444,7 +446,7 @@ export default function UsersPage() {
                 </div>
                 {allowedAgents.length > 0 && (
                   <Button variant="ghost" size="sm" onClick={() => setAllowedAgents([])} className="text-xs">
-                    Sterge selectia (toti agentii)
+                    {t.users.clearAgents}
                   </Button>
                 )}
               </div>
@@ -453,9 +455,9 @@ export default function UsersPage() {
             {/* Page restrictions */}
             {role !== "admin" && (
               <div className="space-y-1.5 pt-3 border-t">
-                <Label>Pagini permise</Label>
+                <Label>{t.users.allowedPages}</Label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Selectati paginile vizibile. Gol = toate paginile.
+                  {t.users.allowedPagesDesc}
                 </p>
                 <div className="grid grid-cols-2 gap-1.5 max-h-[150px] overflow-y-auto">
                   {ALL_PAGES.map((p) => (
@@ -478,17 +480,17 @@ export default function UsersPage() {
                 </div>
                 {allowedPages.length > 0 && (
                   <Button variant="ghost" size="sm" onClick={() => setAllowedPages([])} className="text-xs">
-                    Sterge selectia (toate paginile)
+                    {t.users.clearPages}
                   </Button>
                 )}
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Anuleaza</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t.users.cancel}</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {editingUser ? "Salveaza" : "Creeaza"}
+              {editingUser ? t.users.save : t.users.create}
             </Button>
           </DialogFooter>
         </DialogContent>

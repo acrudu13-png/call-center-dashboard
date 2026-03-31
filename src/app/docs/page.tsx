@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslation } from "@/lib/i18n";
 import {
   Card,
   CardContent,
@@ -47,19 +48,20 @@ function Section({ children }: { children: React.ReactNode }) {
 }
 
 export default function DocsPage() {
+  const { t, locale } = useTranslation();
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
         <div className="flex items-center gap-3 mb-2">
           <BookOpen className="h-7 w-7 text-primary" />
-          <h1 className="text-3xl font-bold tracking-tight">Documentatie</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t.docs.title}</h1>
         </div>
-        <P>CallQA Dashboard — ghid de utilizare.</P>
+        <P>{t.docs.subtitle}</P>
       </div>
 
       <Separator />
 
-      <UserGuide />
+      {locale === "en" ? <UserGuideEn /> : <UserGuide />}
     </div>
   );
 }
@@ -299,3 +301,220 @@ function UserGuide() {
   );
 }
 
+/* ═══════════════════════════════════════════════════════
+   USER GUIDE — ENGLISH
+   ═══════════════════════════════════════════════════════ */
+
+function UserGuideEn() {
+  return (
+    <div className="space-y-8">
+      <Section>
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-primary" />
+          <H2>Dashboard</H2>
+        </div>
+        <P>The main page displays a summary of call center quality.</P>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[
+            { icon: Phone, label: "Total calls analyzed", desc: "Total number of calls processed by the system." },
+            { icon: BarChart3, label: "Average quality score", desc: "Average QA score across all agents." },
+            { icon: AlertTriangle, label: "Critical failures", desc: "Calls that failed critical rules." },
+            { icon: CheckCircle2, label: "Pending review", desc: "Calls awaiting supervisor review." },
+          ].map(({ icon: Icon, label, desc }) => (
+            <Card key={label} className="bg-muted/40">
+              <CardContent className="pt-4 pb-3 flex items-center gap-3">
+                <Icon className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <p className="font-medium text-sm">{label}</p>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <P>The table below shows calls flagged for review — calls with compliance issues.</P>
+      </Section>
+
+      <Separator />
+
+      <Section>
+        <div className="flex items-center gap-2">
+          <Phone className="h-5 w-5 text-primary" />
+          <H2>Calls Explorer</H2>
+        </div>
+        <P>Browse, search, and filter all processed call recordings.</P>
+        <div className="space-y-2">
+          {[
+            { icon: Search, title: "Search", desc: "Filter by call ID, agent name, or phone number." },
+            { icon: SlidersHorizontal, title: "Advanced filters", desc: "Filter by status, agent, direction (inbound/outbound), score range, ingestion run." },
+            { icon: ArrowRight, title: "Sorting", desc: "Click column headers (Date, Agent, Duration, Score) to sort." },
+            { icon: PhoneIncoming, title: "Direction", desc: "Each call shows direction: In (inbound — customer calls) or Out (outbound — agent calls)." },
+          ].map(({ icon: Icon, title, desc }) => (
+            <div key={title} className="flex items-start gap-3 p-3 rounded-lg border">
+              <Icon className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">{title}</p>
+                <P>{desc}</P>
+              </div>
+            </div>
+          ))}
+        </div>
+        <P>Ineligible calls (voicemail, too short) are marked with <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300">N/A</Badge> and do not affect statistics.</P>
+      </Section>
+
+      <Separator />
+
+      <Section>
+        <div className="flex items-center gap-2">
+          <Phone className="h-5 w-5 text-primary" />
+          <H2>Call Details</H2>
+        </div>
+        <P>Click a call to view full details.</P>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+          <li><strong>Audio player</strong> — listen to the recording directly in the browser.</li>
+          <li><strong>AI Summary</strong> — auto-generated conversation summary.</li>
+          <li><strong>Recommendations</strong> — improvement tips for the agent.</li>
+          <li><strong>Transcript</strong> — full transcript with color-coded speakers.</li>
+          <li><strong>QA Scorecard</strong> — per-rule scores with detailed explanations.</li>
+          <li><strong>Call info</strong> — agent, customer phone, duration, direction.</li>
+          <li><strong>Info File</strong> — raw data from the .info file (expandable).</li>
+        </ul>
+        <div className="flex flex-wrap gap-2 mt-2">
+          <Badge variant="outline" className="gap-1"><RotateCcw className="h-3 w-3" /> Reanalyze — resend to AI with current rules</Badge>
+          <Badge variant="outline" className="gap-1"><Trash2 className="h-3 w-3" /> Delete — remove from system</Badge>
+        </div>
+      </Section>
+
+      <Separator />
+
+      <Section>
+        <div className="flex items-center gap-2">
+          <Users className="h-5 w-5 text-primary" />
+          <H2>Agents Hub</H2>
+        </div>
+        <P>Overview of each agent&apos;s performance.</P>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+          <li><strong>Summary cards</strong> — total agents, total calls, average score, average compliance.</li>
+          <li><strong>Score chart</strong> — average QA score per agent (color-coded).</li>
+          <li><strong>Score distribution</strong> — pie chart: excellent / good / poor, filterable per agent.</li>
+          <li><strong>Calls per agent</strong> — number of calls processed per agent.</li>
+          <li><strong>Detailed table</strong> — sortable, with score, compliance, average duration, flagged calls.</li>
+          <li><strong>Agent detail</strong> — click a row for extended details + link to agent&apos;s calls.</li>
+        </ul>
+        <P>Ineligible calls are not included in agent statistics.</P>
+      </Section>
+
+      <Separator />
+
+      <Section>
+        <div className="flex items-center gap-2">
+          <ClipboardCheck className="h-5 w-5 text-primary" />
+          <H2>QA Rules</H2>
+        </div>
+        <P>Manage evaluation criteria for call quality analysis.</P>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Card className="bg-muted/40">
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center gap-2 mb-1">
+                <ListChecks className="h-4 w-4 text-primary" />
+                <p className="font-medium text-sm">Scoring rule</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Has a max score (e.g. 5 points). AI evaluates and returns score + explanation.</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-muted/40">
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Tag className="h-4 w-4 text-blue-500" />
+                <p className="font-medium text-sm">Extraction rule</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Extracts a value from transcript (e.g. customer name, call reason).</p>
+            </CardContent>
+          </Card>
+        </div>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside mt-3">
+          <li><strong>Add:</strong> Click the &quot;+&quot; button. Fill in title, description, section, max score.</li>
+          <li><strong>Edit:</strong> Click the pencil icon.</li>
+          <li><strong>Delete:</strong> Click the trash icon.</li>
+          <li><strong>Reorder:</strong> Use up/down arrows. Rules are evaluated in this order.</li>
+          <li><strong>Enable/Disable:</strong> Toggle on each rule. Disabled rules are not sent to AI.</li>
+          <li><strong>Critical rule:</strong> Toggle in edit. Failure marks the call as &quot;flagged&quot; and affects agent compliance.</li>
+          <li><strong>Direction:</strong> Each rule can be set for inbound, outbound, or both. Automatically filtered by call direction.</li>
+        </ul>
+      </Section>
+
+      <Separator />
+
+      <Section>
+        <div className="flex items-center gap-2">
+          <FileDown className="h-5 w-5 text-primary" />
+          <H2>Export</H2>
+        </div>
+        <P>Export call data as CSV.</P>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+          <li>Apply filters (status, agent, run, score) to export a subset.</li>
+          <li>Toggle &quot;Include per-rule scores&quot; — adds a column for each QA rule.</li>
+          <li>CSV includes: call metadata, scores, grade, AI summary.</li>
+          <li>Filename includes export date and time.</li>
+        </ul>
+      </Section>
+
+      <Separator />
+
+      <Section>
+        <div className="flex items-center gap-2">
+          <Activity className="h-5 w-5 text-primary" />
+          <H2>Logs &amp; Monitoring</H2>
+        </div>
+        <P>Processing status and real-time event logs.</P>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+          <li><strong>Status cards</strong> — ingestion status, files in queue, total processed, failed.</li>
+          <li><strong>Processing runs</strong> — history with progress, duration, actions (stop/resume/delete).</li>
+          <li><strong>Live logs</strong> — recent processing events, expandable on click.</li>
+          <li><strong>Processing jobs</strong> — file queue with status and individual progress.</li>
+          <li><strong>Processing flow</strong> — 4 steps: download, transcribe, analyze, store.</li>
+        </ul>
+      </Section>
+
+      <Separator />
+
+      <Section>
+        <div className="flex items-center gap-2">
+          <Database className="h-5 w-5 text-primary" />
+          <H2>Settings</H2>
+        </div>
+        <P>Three settings pages configure data sources and integrations:</P>
+        <div className="space-y-3">
+          {[
+            { icon: Database, label: "Data Ingestion", desc: "SFTP/S3 source configuration for recordings. Download path, daily schedule, and manual trigger." },
+            { icon: Brain, label: "AI & Transcription", desc: "API key for AI analysis service. Transcription configuration (language, custom vocabulary, context)." },
+            { icon: Webhook, label: "Export & Webhooks", desc: "Endpoint for automatic delivery of QA results after processing." },
+          ].map(({ icon: Icon, label, desc }) => (
+            <div key={label} className="flex gap-3 p-4 rounded-lg border">
+              <Icon className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">{label}</p>
+                <P>{desc}</P>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Separator />
+
+      <Section>
+        <div className="flex items-center gap-2">
+          <Languages className="h-5 w-5 text-primary" />
+          <H2>Language &amp; Authentication</H2>
+        </div>
+        <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
+          <li><strong>Language switch:</strong> Click the language button in the sidebar to toggle between Romanian and English.</li>
+          <li><strong>Authentication:</strong> The system requires login. Contact the administrator for credentials.</li>
+          <li><strong>Roles:</strong> Admin (full access + user management), Manager (full access without user management), Viewer (read-only).</li>
+          <li><strong>Sign out:</strong> Click the sign out button in the sidebar.</li>
+        </ul>
+      </Section>
+    </div>
+  );
+}

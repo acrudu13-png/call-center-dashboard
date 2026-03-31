@@ -38,6 +38,7 @@ import Link from "next/link";
 import { Slider } from "@/components/ui/slider";
 import { fetchCall, getAudioUrl, analyzeCall, deleteCall, type CallDetail } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { useTranslation } from "@/lib/i18n";
 import { RotateCcw, Trash2 } from "lucide-react";
 
 function formatTime(seconds: number) {
@@ -85,6 +86,7 @@ export default function CallDetailClient({
   const [reanalyzing, setReanalyzing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const router = useRouter();
+  const { t } = useTranslation();
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -189,10 +191,10 @@ export default function CallDetailClient({
   if (error || !call) {
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
-        <p className="text-muted-foreground">{error || "Apelul nu a fost găsit"}</p>
+        <p className="text-muted-foreground">{error || "{t.callDetail.callNotFound}"}</p>
         <Link href="/calls">
           <Button variant="outline">
-            <ArrowLeft className="h-4 w-4 mr-2" /> Înapoi la apeluri
+            <ArrowLeft className="h-4 w-4 mr-2" /> {t.callDetail.backToCalls}
           </Button>
         </Link>
       </div>
@@ -239,17 +241,17 @@ export default function CallDetailClient({
           </Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">Detalii Apel</h1>
+          <h1 className="text-2xl font-bold">{t.callDetail.title}</h1>
           <p className="text-muted-foreground">ID: {call.callId}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleReanalyze} disabled={reanalyzing}>
             {reanalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
-            {reanalyzing ? "Analyzing..." : "Reanalyze"}
+            {reanalyzing ? t.callDetail.analyzing : t.callDetail.reanalyze}
           </Button>
           <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleting}>
             {deleting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
-            {deleting ? "Deleting..." : "Delete"}
+            {deleting ? t.callDetail.deleting : t.callDetail.deleteCall}
           </Button>
           <Badge variant="outline" className="text-xs">
             {call.direction === "inbound" ? "Inbound" : call.direction === "outbound" ? "Outbound" : "—"}
@@ -273,13 +275,13 @@ export default function CallDetailClient({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Headphones className="h-5 w-5" />
-                Înregistrare Apel
+                {t.callDetail.recording}
               </CardTitle>
               <CardDescription>
                 {new Date(call.dateTime).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" })} • {formatTime(call.duration)}
                 {call.processedAt && (
                   <span className="ml-3 text-muted-foreground">
-                    Procesat: {new Date(call.processedAt).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" })}
+                    {t.callDetail.processed}: {new Date(call.processedAt).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" })}
                   </span>
                 )}
               </CardDescription>
@@ -323,7 +325,7 @@ export default function CallDetailClient({
                 </div>
               )}
               {!audioReady && !audioLoading && (
-                <p className="text-xs text-muted-foreground">Press play to download and listen to the recording</p>
+                <p className="text-xs text-muted-foreground">{t.callDetail.pressPlay}</p>
               )}
               {call.audioFileName && (
                 <p className="text-xs text-muted-foreground font-mono truncate mt-1" title={call.audioFileName}>
@@ -340,9 +342,9 @@ export default function CallDetailClient({
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-red-800">Procesarea a esuat</p>
+                    <p className="text-sm font-medium text-red-800">{t.callDetail.processingFailed}</p>
                     <p className="text-sm text-red-700 mt-1">
-                      {call.ineligibleReason || "Eroare necunoscuta in timpul procesarii."}
+                      {call.ineligibleReason || t.callDetail.unknownError}
                     </p>
                   </div>
                 </div>
@@ -355,7 +357,7 @@ export default function CallDetailClient({
             <Card className="border-orange-200 bg-orange-50/50">
               <CardContent className="pt-6">
                 <p className="text-sm text-orange-700">
-                  {call.ineligibleReason || "Apelul nu este eligibil pentru evaluare QA."}
+                  {call.ineligibleReason || t.callDetail.notEligible}
                 </p>
                 {call.aiSummary && (
                   <p className="text-sm text-muted-foreground mt-2">{call.aiSummary}</p>
@@ -370,7 +372,7 @@ export default function CallDetailClient({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Brain className="h-5 w-5" />
-                  Rezumat AI
+                  {t.callDetail.aiSummary}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -385,7 +387,7 @@ export default function CallDetailClient({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <TrendingUp className="h-5 w-5" />
-                  Recomandări de Îmbunătățire
+                  {t.callDetail.improvements}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -407,13 +409,13 @@ export default function CallDetailClient({
           <Card>
             <CardHeader>
               <div className="flex items-start justify-between">
-                <CardTitle>Transcript</CardTitle>
+                <CardTitle>{t.callDetail.transcript}</CardTitle>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(speakerIndex).map(([id, n]) => {
                     const p = SPEAKER_PALETTE[n % SPEAKER_PALETTE.length];
                     return (
                       <span key={id} className="text-xs px-2 py-0.5 rounded-full font-medium border" style={{ background: p.avatar, borderColor: p.border, color: p.label }}>
-                        Vorbitor {n + 1}
+                        {t.callDetail.speaker} {n + 1}
                       </span>
                     );
                   })}
@@ -433,7 +435,7 @@ export default function CallDetailClient({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-xs font-semibold" style={{ color: p.label }}>Vorbitor {n + 1}</span>
+                            <span className="text-xs font-semibold" style={{ color: p.label }}>{t.callDetail.speaker} {n + 1}</span>
                             <span className="text-xs text-muted-foreground">{formatTime(entry.timestamp)}</span>
                           </div>
                           <p className="text-sm leading-relaxed">{entry.text}</p>
@@ -442,7 +444,7 @@ export default function CallDetailClient({
                     );
                   })}
                   {transcript.length === 0 && (
-                    <p className="text-center text-muted-foreground py-8">Nu există transcript</p>
+                    <p className="text-center text-muted-foreground py-8">{t.callDetail.noTranscript}</p>
                   )}
                 </div>
               </ScrollArea>
@@ -455,7 +457,7 @@ export default function CallDetailClient({
           {call.isEligible && (
             <Card>
               <CardHeader>
-                <CardTitle>Scorecard QA</CardTitle>
+                <CardTitle>{t.callDetail.scorecard}</CardTitle>
                 <CardDescription>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`text-2xl font-bold ${getScoreColor(overallScore)}`}>{Math.round(overallScore)}%</span>
@@ -463,7 +465,7 @@ export default function CallDetailClient({
                   </div>
                   {call.aiTotalEarned !== undefined && call.aiTotalPossible !== undefined && (
                     <span className="text-xs font-mono text-muted-foreground">
-                      {call.aiTotalEarned}/{call.aiTotalPossible} puncte
+                      {call.aiTotalEarned}/{call.aiTotalPossible} {t.callDetail.points}
                     </span>
                   )}
                 </CardDescription>
@@ -488,7 +490,7 @@ export default function CallDetailClient({
 
                   {extractionRules.length > 0 && (
                     <div className="pt-2 mt-2 border-t">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Extracții</span>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.callDetail.extractions}</span>
                       {extractionRules.map((entry) => (
                         <div key={entry.ruleId} className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50">
                           <Tag className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
@@ -508,24 +510,24 @@ export default function CallDetailClient({
 
           <Card>
             <CardHeader>
-              <CardTitle>Informații Apel</CardTitle>
+              <CardTitle>{t.callDetail.callInfo}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm">Agent</span>
+                <span className="text-muted-foreground text-sm">{t.callDetail.agent}</span>
                 <span className="font-medium text-sm">{call.agentName}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm">Telefon</span>
+                <span className="text-muted-foreground text-sm">{t.callDetail.phone}</span>
                 <span className="font-medium text-sm font-mono">{call.customerPhone}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm">Durată</span>
+                <span className="text-muted-foreground text-sm">{t.callDetail.duration}</span>
                 <span className="font-medium text-sm">{formatTime(call.duration)}</span>
               </div>
               {call.isEligible && (
                 <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground text-sm">Scor QA</span>
+                  <span className="text-muted-foreground text-sm">{t.callDetail.qaScore}</span>
                   <div className="flex items-center gap-2">
                     <span className={`font-bold text-sm ${getScoreColor(overallScore)}`}>{Math.round(overallScore)}%</span>
                     <GradeBadge grade={grade} />
@@ -587,7 +589,7 @@ function InfoFilePanel({ content }: { content: string }) {
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <Tag className="h-4 w-4" />
-            Info File
+            {t.callDetail.infoFile}
           </CardTitle>
           <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
             {open ? "Collapse" : "Expand"}
@@ -656,7 +658,7 @@ function LlmDebugPanel({ request, response }: { request?: string | null; respons
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <Brain className="h-4 w-4" />
-            LLM Debug
+            {t.callDetail.llmDebug}
           </CardTitle>
           <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
             {open ? "Collapse" : "Expand"}
