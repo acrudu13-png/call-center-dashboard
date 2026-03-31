@@ -170,7 +170,38 @@ export default function UsersPage() {
       setDialogOpen(false);
       loadUsers();
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : "Failed to save user");
+      const msg = e instanceof Error ? e.message : "Failed to save user";
+      // Parse 422 validation errors into friendly messages
+      const match = msg.match(/API error 422: (.*)/);
+      if (match) {
+        try {
+          const body = JSON.parse(match[1]);
+          const errors = (body.detail || []).map((d: { msg?: string; loc?: string[] }) => {
+            const field = d.loc?.slice(-1)[0] || "";
+            const message = (d.msg || "").replace("Value error, ", "").replace("value is not a valid email address: ", "");
+            const fieldNames: Record<string, string> = {
+              username: "Username", email: "Email", password: "Parola", full_name: "Nume",
+            };
+            return `${fieldNames[field] || field}: ${message}`;
+          });
+          setFormError(errors.join("\n"));
+        } catch {
+          setFormError(msg);
+        }
+      } else {
+        // Parse other API errors like 409 Conflict
+        const detailMatch = msg.match(/API error \d+: (.*)/);
+        if (detailMatch) {
+          try {
+            const body = JSON.parse(detailMatch[1]);
+            setFormError(body.detail || msg);
+          } catch {
+            setFormError(msg);
+          }
+        } else {
+          setFormError(msg);
+        }
+      }
     } finally {
       setSaving(false);
     }
@@ -327,9 +358,13 @@ export default function UsersPage() {
           </DialogHeader>
           <div className="space-y-4">
             {formError && (
-              <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-md p-3">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                {formError}
+              <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 rounded-md p-3">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  {formError.split("\n").map((line, i) => (
+                    <p key={i}>{line}</p>
+                  ))}
+                </div>
               </div>
             )}
             <div className="space-y-1.5">
