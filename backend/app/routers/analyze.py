@@ -120,9 +120,11 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         call.is_eligible = result.isEligible
         call.ineligible_reason = result.ineligibleReason
         # Merge speaker map into raw_json
-        rj = call.raw_json or {}
+        from sqlalchemy.orm.attributes import flag_modified
+        rj = dict(call.raw_json or {})  # copy to ensure new reference
         rj["speaker_map"] = result.speakerMap
         call.raw_json = rj
+        flag_modified(call, "raw_json")
         call.llm_request = result.llmRequest
         call.llm_response = result.llmResponse
 
@@ -253,6 +255,11 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
             call.status = "flagged" if result.hasCriticalFailure else "completed"
             call.is_eligible = result.isEligible
             call.ineligible_reason = result.ineligibleReason
+            from sqlalchemy.orm.attributes import flag_modified
+            rj = dict(call.raw_json or {})
+            rj["speaker_map"] = result.speakerMap
+            call.raw_json = rj
+            flag_modified(call, "raw_json")
             call.llm_request = result.llmRequest
             call.llm_response = result.llmResponse
 

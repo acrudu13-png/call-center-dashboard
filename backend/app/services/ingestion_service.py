@@ -700,9 +700,11 @@ class IngestionService:
             call.status = "flagged" if analysis.hasCriticalFailure else "completed"
             call.is_eligible = analysis.isEligible
             call.ineligible_reason = analysis.ineligibleReason
-            rj = call.raw_json or {}
+            from sqlalchemy.orm.attributes import flag_modified
+            rj = dict(call.raw_json or {})
             rj["speaker_map"] = analysis.speakerMap
             call.raw_json = rj
+            flag_modified(call, "raw_json")
             call.llm_request = analysis.llmRequest
             call.llm_response = analysis.llmResponse
 
