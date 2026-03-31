@@ -158,7 +158,7 @@ class LLMService:
                 )
                 response.raise_for_status()
                 data = response.json()
-                raw_result = data["choices"][0]["message"]["content"].strip()
+                raw_result = (data["choices"][0]["message"].get("content") or "other").strip()
                 debug["response"] = raw_result
 
                 result = raw_result.lower().strip('"').strip("'").strip()
