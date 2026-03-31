@@ -125,15 +125,15 @@ class LLMService:
             for seg in transcript[:30]
         )
 
+        keys_list = ", ".join(ct["key"] for ct in call_types)
         prompt = (
-            f"{'AGENT: ' + agent_name + chr(10) if agent_name else ''}"
-            f"TIPURI DISPONIBILE:\n{types_text}\n\n"
-            f"TRANSCRIPT (primele linii):\n{short_transcript}\n\n"
-            f"Raspunde DOAR cu cheia tipului (ex: customer_support, sales, debt_collection, etc.):"
+            f"Categories:\n{types_text}\n\n"
+            f"Transcript:\n{short_transcript}\n\n"
+            f"Which category? Reply with one of: {keys_list}"
         )
 
         messages = [
-            {"role": "system", "content": "Clasifici tipul apelului telefonic. Raspunde DOAR cu cheia tipului, nimic altceva."},
+            {"role": "system", "content": "You classify phone calls into categories. Reply with ONLY the category key, nothing else. No explanation."},
             {"role": "user", "content": prompt},
         ]
 
