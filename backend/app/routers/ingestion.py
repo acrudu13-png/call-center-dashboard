@@ -4,11 +4,20 @@ from sqlalchemy import desc
 from typing import Optional
 
 from app.database import get_db, SessionLocal
-from app.database import utcnow
+from app.database import utcnow, APP_TZ
 from app.services.ingestion_service import IngestionService
 from app.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/ingestion", tags=["ingestion"], dependencies=[Depends(get_current_user)])
+
+
+def _ts(dt) -> str | None:
+    """Serialize a datetime with timezone. Naive datetimes get APP_TZ attached."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=APP_TZ)
+    return dt.isoformat()
 
 
 async def _run_ingestion_bg(source: str, remote_path: Optional[str] = None, resume_run_id: Optional[str] = None):
@@ -93,8 +102,8 @@ def _broadcast_run_from_db(run):
         "downloadedFiles": run.downloaded_files, "processedFiles": run.processed_files,
         "failedFiles": run.failed_files, "currentFile": None,
         "errorMessage": run.error_message,
-        "startedAt": run.started_at.isoformat() if run.started_at else None,
-        "completedAt": run.completed_at.isoformat() if run.completed_at else None,
+        "startedAt": _ts(run.started_at),
+        "completedAt": _ts(run.completed_at),
     })
 
 
@@ -144,7 +153,7 @@ def runs_list(db: Session = Depends(get_db)):
             "status": r.status,
             "totalFiles": r.total_files,
             "processedFiles": r.processed_files,
-            "startedAt": r.started_at.isoformat() if r.started_at else None,
+            "startedAt": _ts(r.started_at),
         })
     return {"runs": result}
 
@@ -218,8 +227,8 @@ def ingestion_progress(
                 "failedFiles": r.failed_files,
                 "currentFile": r.current_file,
                 "errorMessage": r.error_message,
-                "startedAt": r.started_at.isoformat() if r.started_at else None,
-                "completedAt": r.completed_at.isoformat() if r.completed_at else None,
+                "startedAt": _ts(r.started_at),
+                "completedAt": _ts(r.completed_at),
             }
             for r in runs
         ]

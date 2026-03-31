@@ -328,8 +328,25 @@ export default function CallDetailClient({
             </CardContent>
           </Card>
 
-          {/* Ineligible notice */}
-          {!call.isEligible && (
+          {/* Failed notice */}
+          {call.status === "failed" && (
+            <Card className="border-red-300 bg-red-50/50">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-red-800">Procesarea a esuat</p>
+                    <p className="text-sm text-red-700 mt-1">
+                      {call.ineligibleReason || "Eroare necunoscuta in timpul procesarii."}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Ineligible notice (not failed) */}
+          {!call.isEligible && call.status !== "failed" && (
             <Card className="border-orange-200 bg-orange-50/50">
               <CardContent className="pt-6">
                 <p className="text-sm text-orange-700">
