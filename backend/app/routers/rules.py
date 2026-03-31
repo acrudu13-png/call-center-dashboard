@@ -6,9 +6,9 @@ from app.models.rule import QARule
 from app.schemas.rule import (
     QARuleCreate, QARuleUpdate, QARuleResponse, ReorderRequest,
 )
-from app.auth import get_current_user, require_role
+from app.auth import get_current_user, require_role, require_page
 
-router = APIRouter(prefix="/api/rules", tags=["rules"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/rules", tags=["rules"], dependencies=[Depends(require_page("rules"))])
 
 
 @router.get("", response_model=list[QARuleResponse])

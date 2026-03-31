@@ -11,9 +11,9 @@ from app.services.sftp_service import SFTPService
 from app.services.s3_service import S3Service
 from app.services.webhook_service import WebhookService
 from app.services.settings_service import get_setting as _get_setting, save_setting as _save_setting
-from app.auth import get_current_user, require_role
+from app.auth import get_current_user, require_role, require_page
 
-router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_page("ingestion", "ai", "webhooks"))])
 
 
 # --- SFTP ---

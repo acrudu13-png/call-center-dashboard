@@ -111,3 +111,19 @@ def require_role(*roles: str):
             )
         return user
     return _check
+
+
+def require_page(*page_keys: str):
+    """Dependency factory: require user to have access to at least one of the listed pages."""
+    def _check(user: User = Depends(get_current_user)) -> User:
+        if user.role == "admin":
+            return user  # admin always has access
+        if not user.allowed_pages:
+            return user  # empty = all pages
+        if any(k in user.allowed_pages for k in page_keys):
+            return user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+    return _check

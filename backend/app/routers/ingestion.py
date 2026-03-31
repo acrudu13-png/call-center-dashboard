@@ -6,9 +6,9 @@ from typing import Optional
 from app.database import get_db, SessionLocal
 from app.database import utcnow, APP_TZ
 from app.services.ingestion_service import IngestionService
-from app.auth import get_current_user, require_role
+from app.auth import get_current_user, require_role, require_page
 
-router = APIRouter(prefix="/api/ingestion", tags=["ingestion"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/ingestion", tags=["ingestion"], dependencies=[Depends(require_page("logs", "ingestion"))])
 
 
 def _ts(dt) -> str | None:

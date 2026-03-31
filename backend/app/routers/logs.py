@@ -6,9 +6,9 @@ from typing import Optional
 from app.database import get_db
 from app.models.job import TranscriptionJob, LogEntry
 from app.schemas.job import JobResponse, JobListResponse, LogEntryResponse, LogListResponse
-from app.auth import get_current_user
+from app.auth import get_current_user, require_page
 
-router = APIRouter(prefix="/api/logs", tags=["logs"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/logs", tags=["logs"], dependencies=[Depends(require_page("logs"))])
 
 
 @router.get("/jobs", response_model=JobListResponse)
