@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { type QARule } from "@/lib/mockData";
 import { saveQARule, deleteQARule, saveMainPrompt } from "@/lib/actions";
-import { fetchRules, fetchSetting } from "@/lib/api";
+import { fetchRules, fetchSetting, fetchCallTypes, type CallTypeInfo } from "@/lib/api";
 import {
   Plus,
   GripVertical,
@@ -59,9 +59,11 @@ export default function RulesEnginePage() {
   const [mainPrompt, setMainPrompt] = useState(DEFAULT_MAIN_PROMPT);
   const [promptSaving, setPromptSaving] = useState(false);
   const [promptStatus, setPromptStatus] = useState<string | null>(null);
+  const [callTypes, setCallTypes] = useState<CallTypeInfo[]>([]);
 
-  // Load rules and prompt from API
+  // Load rules, prompt, and call types from API
   useEffect(() => {
+    fetchCallTypes().then(setCallTypes).catch(() => {});
     fetchRules().then((apiRules) => {
       setRules(apiRules.map((r) => ({
         id: r.rule_id,
@@ -73,6 +75,7 @@ export default function RulesEnginePage() {
         enabled: r.enabled,
         isCritical: r.is_critical,
         direction: r.direction || "both",
+        callTypes: r.call_types || [],
         order: r.sort_order,
       })));
     }).catch(() => {});
@@ -99,6 +102,7 @@ export default function RulesEnginePage() {
     enabled: true,
     isCritical: false,
     direction: "both",
+    callTypes: [],
     order: rules.length + 1,
   };
 
@@ -364,6 +368,33 @@ export default function RulesEnginePage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {callTypes.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>Tip apel</Label>
+                    <p className="text-xs text-muted-foreground">Gol = toate tipurile.</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {callTypes.map((ct) => (
+                        <label key={ct.key} className="flex items-center gap-2 text-sm cursor-pointer p-1.5 rounded hover:bg-muted">
+                          <input
+                            type="checkbox"
+                            checked={(editingRule.callTypes || []).includes(ct.key)}
+                            onChange={(e) => {
+                              const current = editingRule.callTypes || [];
+                              setEditingRule({
+                                ...editingRule,
+                                callTypes: e.target.checked
+                                  ? [...current, ct.key]
+                                  : current.filter((k: string) => k !== ct.key),
+                              });
+                            }}
+                            className="rounded"
+                          />
+                          {ct.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={editingRule.isCritical || false}
@@ -521,6 +552,11 @@ export default function RulesEnginePage() {
                             )}
                             {rule.isCritical && (
                               <Badge variant="destructive" className="text-xs">CRITICAL</Badge>
+                            )}
+                            {rule.callTypes && rule.callTypes.length > 0 && (
+                              <Badge variant="secondary" className="text-xs">
+                                {rule.callTypes.map(k => callTypes.find(ct => ct.key === k)?.name || k).join(", ")}
+                              </Badge>
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground">

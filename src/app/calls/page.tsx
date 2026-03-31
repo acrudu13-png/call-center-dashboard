@@ -41,7 +41,7 @@ import {
   PhoneIncoming,
   PhoneOutgoing,
 } from "lucide-react";
-import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, bulkReanalyze, type CallSummary, type QARule, type IngestionRunListItem } from "@/lib/api";
+import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, fetchCallTypes, bulkReanalyze, type CallSummary, type QARule, type IngestionRunListItem, type CallTypeInfo } from "@/lib/api";
 import { RotateCcw } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
@@ -81,6 +81,7 @@ export default function CallsExplorerPage() {
   const [loading, setLoading] = useState(true);
   const [bulkAnalyzing, setBulkAnalyzing] = useState(false);
   const [rules, setRules] = useState<QARule[]>([]);
+  const [callTypesList, setCallTypesList] = useState<CallTypeInfo[]>([]);
 
   function getQAStatus(score: number): "Passed" | "Average" | "Failed" {
     if (score >= 85) return "Passed";
@@ -92,6 +93,7 @@ export default function CallsExplorerPage() {
   useEffect(() => {
     fetchRules().then(setRules).catch(() => {});
     fetchAgents().then(setAgents).catch(() => {});
+    fetchCallTypes().then(setCallTypesList).catch(() => {});
     fetchIngestionRunsList().then((res) => setIngestionRuns(res.runs)).catch(() => {});
   }, []);
 
@@ -372,13 +374,18 @@ export default function CallsExplorerPage() {
                   </TableCell>
                   <TableCell>{call.agentName}</TableCell>
                   <TableCell>
-                    {call.direction === "inbound" ? (
-                      <span className="flex items-center gap-1 text-blue-600 text-xs"><PhoneIncoming className="h-3 w-3" /> In</span>
-                    ) : call.direction === "outbound" ? (
-                      <span className="flex items-center gap-1 text-green-600 text-xs"><PhoneOutgoing className="h-3 w-3" /> Out</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                    <div>
+                      {call.direction === "inbound" ? (
+                        <span className="flex items-center gap-1 text-blue-600 text-xs"><PhoneIncoming className="h-3 w-3" /> In</span>
+                      ) : call.direction === "outbound" ? (
+                        <span className="flex items-center gap-1 text-green-600 text-xs"><PhoneOutgoing className="h-3 w-3" /> Out</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                      {call.callType && (
+                        <span className="text-xs text-muted-foreground block">{callTypesList.find(ct => ct.key === call.callType)?.name || call.callType}</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="font-mono text-sm">{call.customerPhone}</TableCell>
                   <TableCell>{formatDuration(call.duration)}</TableCell>

@@ -103,6 +103,71 @@ class LLMService:
     def __init__(self, settings: LlmSettings):
         self.settings = settings
 
+    async def classify_call(
+        self,
+        transcript: list[dict],
+        call_types: list[dict],
+        agent_name: Optional[str] = None,
+    ) -> str:
+        """Classify the call type based on transcript. Returns the call type key."""
+        if not self.settings.openRouterApiKey or not call_types:
+            return "other"
+
+        types_text = "\n".join(
+            f"- {ct['key']}: {ct['name']} — {ct['description']}"
+            for ct in call_types
+        )
+
+        # Use only first 30 lines of transcript for speed
+        short_transcript = "\n".join(
+            f"[{seg['timestamp']:.1f}s] {seg['speaker']}: {seg['text']}"
+            for seg in transcript[:30]
+        )
+
+        messages = [
+            {"role": "system", "content": "Clasifici tipul apelului telefonic. Raspunde DOAR cu cheia tipului, nimic altceva."},
+            {"role": "user", "content": (
+                f"{'AGENT: ' + agent_name + chr(10) if agent_name else ''}"
+                f"TIPURI DISPONIBILE:\n{types_text}\n\n"
+                f"TRANSCRIPT (primele linii):\n{short_transcript}\n\n"
+                f"Raspunde DOAR cu cheia tipului (ex: customer_support, sales, debt_collection, etc.):"
+            )},
+        ]
+
+        headers = {
+            "Authorization": f"Bearer {self.settings.openRouterApiKey}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.post(
+                    OPENROUTER_URL,
+                    headers=headers,
+                    json={
+                        "model": "openai/gpt-5-nano",
+                        "messages": messages,
+                        "temperature": 0,
+                        "max_tokens": 50,
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+                result = data["choices"][0]["message"]["content"].strip().lower()
+                # Clean up — extract just the key
+                result = result.strip('"').strip("'").strip()
+                valid_keys = {ct["key"] for ct in call_types}
+                if result in valid_keys:
+                    return result
+                # Try to find a match in the response
+                for key in valid_keys:
+                    if key in result:
+                        return key
+                return "other"
+        except Exception as e:
+            logger.warning(f"Call classification failed: {e}, defaulting to 'other'")
+            return "other"
+
     async def analyze_call(
         self,
         transcript: list[dict],

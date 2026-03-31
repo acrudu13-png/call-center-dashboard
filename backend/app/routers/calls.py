@@ -50,6 +50,7 @@ def _call_to_summary(c: Call) -> CallSummary:
         rulesFailed=c.rules_failed or [],
         compliancePass=c.compliance_pass,
         direction=c.direction or "unknown",
+        callType=c.call_type,
         isEligible=c.is_eligible if c.is_eligible is not None else True,
         ineligibleReason=c.ineligible_reason,
     )
@@ -354,6 +355,7 @@ def get_call(call_id: str, current_user=Depends(get_current_user), db: Session =
         rulesFailed=call.rules_failed or [],
         compliancePass=call.compliance_pass,
         direction=call.direction or "unknown",
+        callType=call.call_type,
         isEligible=call.is_eligible if call.is_eligible is not None else True,
         ineligibleReason=call.ineligible_reason,
         transcript=transcript,

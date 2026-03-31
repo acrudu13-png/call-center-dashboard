@@ -108,6 +108,7 @@ export async function saveQARule(rule: {
   enabled: boolean;
   isCritical?: boolean;
   direction?: string;
+  callTypes?: string[];
 }) {
   if (rule.id) {
     await updateRule(rule.id, {
@@ -117,6 +118,7 @@ export async function saveQARule(rule: {
       max_score: rule.maxScore || 0,
       enabled: rule.enabled,
       is_critical: rule.isCritical || false,
+      call_types: rule.callTypes || [],
       direction: rule.direction || "both",
     });
     return { success: true, message: "Rule saved successfully.", id: rule.id };
@@ -132,6 +134,7 @@ export async function saveQARule(rule: {
       enabled: rule.enabled,
       is_critical: rule.isCritical || false,
       direction: rule.direction || "both",
+      call_types: rule.callTypes || [],
     });
     return { success: true, message: "Rule saved successfully.", id };
   }

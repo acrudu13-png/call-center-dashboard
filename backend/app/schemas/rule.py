@@ -11,6 +11,7 @@ class QARuleBase(BaseModel):
     enabled: bool = True
     is_critical: bool = False
     direction: str = "both"  # inbound | outbound | both
+    call_types: list[str] = []  # [] = all types
     sort_order: int = 0
 
 
@@ -27,6 +28,7 @@ class QARuleUpdate(BaseModel):
     enabled: Optional[bool] = None
     is_critical: Optional[bool] = None
     direction: Optional[str] = None
+    call_types: Optional[list[str]] = None
     sort_order: Optional[int] = None
 
 

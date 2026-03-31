@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Slider } from "@/components/ui/slider";
-import { fetchCall, getAudioUrl, analyzeCall, deleteCall, type CallDetail } from "@/lib/api";
+import { fetchCall, getAudioUrl, analyzeCall, deleteCall, fetchCallTypes, type CallDetail, type CallTypeInfo } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
 import { RotateCcw, Trash2 } from "lucide-react";
@@ -85,6 +85,7 @@ export default function CallDetailClient({
   const [audioDuration, setAudioDuration] = useState(0);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [callTypes, setCallTypes] = useState<CallTypeInfo[]>([]);
   const router = useRouter();
   const { t } = useTranslation();
 
@@ -100,6 +101,7 @@ export default function CallDetailClient({
   }, []);
 
   useEffect(() => {
+    fetchCallTypes().then(setCallTypes).catch(() => {});
     fetchCall(id)
       .then(setCall)
       .catch((e) => setError(e.message))
@@ -251,17 +253,12 @@ export default function CallDetailClient({
           <p className="text-muted-foreground">ID: {call.callId}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleReanalyze} disabled={reanalyzing}>
-            {reanalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
-            {reanalyzing ? t.callDetail.analyzing : t.callDetail.reanalyze}
-          </Button>
-          <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleting}>
-            {deleting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
-            {deleting ? t.callDetail.deleting : t.callDetail.deleteCall}
-          </Button>
           <Badge variant="outline" className="text-xs">
             {call.direction === "inbound" ? "Inbound" : call.direction === "outbound" ? "Outbound" : "—"}
           </Badge>
+          {call.callType && (
+            <Badge variant="secondary" className="text-xs">{callTypes.find(ct => ct.key === call.callType)?.name || call.callType}</Badge>
+          )}
           {!call.isEligible && (
             <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300">
               N/A{call.ineligibleReason ? `: ${call.ineligibleReason}` : ""}
@@ -569,6 +566,18 @@ export default function CallDetailClient({
             </Card>
           )}
         </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-3 pt-4 border-t">
+        <Button variant="outline" size="sm" onClick={handleReanalyze} disabled={reanalyzing}>
+          {reanalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
+          {reanalyzing ? t.callDetail.analyzing : t.callDetail.reanalyze}
+        </Button>
+        <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleting}>
+          {deleting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
+          {deleting ? t.callDetail.deleting : t.callDetail.deleteCall}
+        </Button>
       </div>
 
       {/* Info File Panel */}

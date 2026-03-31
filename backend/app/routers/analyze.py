@@ -34,6 +34,8 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     if not llm_settings.openRouterApiKey:
         raise HTTPException(status_code=400, detail="OpenRouter API key not configured")
 
+    llm = LLMService(llm_settings)
+
     # Resolve call
     call = db.query(Call).filter(
         (Call.id == payload.callId) | (Call.call_id == payload.callId)
@@ -67,8 +69,20 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         rules_query = rules_query.filter(QARule.rule_id.in_(payload.ruleIds))
     rules = rules_query.order_by(QARule.sort_order).all()
 
-    # Filter by direction: "both" applies to all calls, otherwise match direction
+    # Classify call type
+    from app.models.call_type import CallType as CallTypeModel
+    call_type_key = None
+    active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).order_by(CallTypeModel.sort_order).all()
+    types_data = [{"key": ct.key, "name": ct.name, "description": ct.description} for ct in active_types]
+    if types_data and call:
+        call_type_key = await llm.classify_call(transcript, types_data, agent_name=call.agent_name)
+        call.call_type = call_type_key
+        db.commit()
+        _add_log(db, "info", f"Classified {call_label} as: {call_type_key}")
+
+    # Filter by direction and call type
     rules = [r for r in rules if r.direction == "both" or r.direction == call_dir]
+    rules = [r for r in rules if not r.call_types or (call_type_key and call_type_key in r.call_types)]
 
     rules_data = [
         {
@@ -78,7 +92,7 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         for r in rules
     ]
 
-    _add_log(db, "info", f"Sending {call_label} ({call_dir}) to AI with {len(rules)} rules")
+    _add_log(db, "info", f"Sending {call_label} ({call_dir}, {call_type_key}) to AI with {len(rules)} rules")
     await manager.broadcast("log", {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Sending {call_label} to AI with {len(rules)} rules",
@@ -90,7 +104,6 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
 
     # Run analysis
     try:
-        llm = LLMService(llm_settings)
         result = await llm.analyze_call(
             transcript, rules_data,
             main_prompt=prompt,

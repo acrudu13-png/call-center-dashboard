@@ -56,6 +56,7 @@ export interface QARule {
   enabled: boolean;
   isCritical?: boolean;
   direction?: string;    // inbound | outbound | both
+  callTypes?: string[];  // [] = all types
   order: number;
 }
 

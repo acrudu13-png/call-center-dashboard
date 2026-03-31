@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import engine, Base
-from app.routers import calls, rules, logs, settings as settings_router, analyze, ingestion, auth
+from app.routers import calls, rules, logs, settings as settings_router, analyze, ingestion, auth, call_types
 from app.ws_manager import manager
 
 logging.basicConfig(
@@ -125,6 +125,7 @@ app.include_router(logs.router)
 app.include_router(settings_router.router)
 app.include_router(analyze.router)
 app.include_router(ingestion.router)
+app.include_router(call_types.router)
 
 
 @app.get("/api/health")

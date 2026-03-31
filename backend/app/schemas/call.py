@@ -35,6 +35,7 @@ class CallSummary(BaseModel):
     rulesFailed: list[str]
     compliancePass: bool
     direction: str = "unknown"
+    callType: Optional[str] = None
     isEligible: bool = True
     ineligibleReason: Optional[str] = None
 

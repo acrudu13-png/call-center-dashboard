@@ -20,7 +20,7 @@ if config.config_file_name is not None:
 
 # Import all models so Alembic can detect them
 from app.database import Base
-from app.models import Call, TranscriptLine, ScorecardEntry, QARule, TranscriptionJob, LogEntry, Setting, User
+from app.models import Call, TranscriptLine, ScorecardEntry, QARule, TranscriptionJob, LogEntry, Setting, User, CallType
 
 target_metadata = Base.metadata
 

@@ -18,7 +18,7 @@ def list_rules(db: Session = Depends(get_db)):
         QARuleResponse(
             rule_id=r.rule_id, title=r.title, description=r.description,
             section=r.section, rule_type=r.rule_type, max_score=r.max_score,
-            enabled=r.enabled, is_critical=r.is_critical, direction=r.direction,
+            enabled=r.enabled, is_critical=r.is_critical, direction=r.direction, call_types=r.call_types or [],
             sort_order=r.sort_order,
         )
         for r in rules
@@ -37,7 +37,7 @@ def create_rule(payload: QARuleCreate, _user=Depends(require_role("admin", "mana
     return QARuleResponse(
         rule_id=rule.rule_id, title=rule.title, description=rule.description,
         section=rule.section, rule_type=rule.rule_type, max_score=rule.max_score,
-        enabled=rule.enabled, is_critical=rule.is_critical, direction=rule.direction,
+        enabled=rule.enabled, is_critical=rule.is_critical, direction=rule.direction, call_types=rule.call_types or [],
         sort_order=rule.sort_order,
     )
 
@@ -54,7 +54,7 @@ def update_rule(rule_id: str, payload: QARuleUpdate, _user=Depends(require_role(
     return QARuleResponse(
         rule_id=rule.rule_id, title=rule.title, description=rule.description,
         section=rule.section, rule_type=rule.rule_type, max_score=rule.max_score,
-        enabled=rule.enabled, is_critical=rule.is_critical, direction=rule.direction,
+        enabled=rule.enabled, is_critical=rule.is_critical, direction=rule.direction, call_types=rule.call_types or [],
         sort_order=rule.sort_order,
     )
 

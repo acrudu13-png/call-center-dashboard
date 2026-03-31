@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Integer, Float, Boolean, DateTime, Text
+from sqlalchemy import String, Integer, Float, Boolean, DateTime, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base, utcnow
 
@@ -19,6 +19,7 @@ class QARule(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     is_critical: Mapped[bool] = mapped_column(Boolean, default=False)
     direction: Mapped[str] = mapped_column(String(10), default="both")  # inbound | outbound | both
+    call_types: Mapped[list] = mapped_column(JSON, default=list)  # [] = all types, ["sales", "support"] = specific
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

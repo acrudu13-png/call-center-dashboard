@@ -434,7 +434,7 @@ class IngestionService:
             "rule_id": r.rule_id, "title": r.title,
             "description": r.description, "max_score": r.max_score,
             "rule_type": r.rule_type, "is_critical": r.is_critical,
-            "direction": r.direction,
+            "direction": r.direction, "call_types": r.call_types or [],
         } for r in self.db.query(QARule).filter(
             QARule.enabled == True
         ).order_by(QARule.sort_order).all()]
@@ -667,13 +667,28 @@ class IngestionService:
             call.is_eligible = False
             call.ineligible_reason = f"Durata prea scurta ({duration}s)"
         else:
-            # 5b. LLM analysis — filter rules by call direction
+            # 5b. Classify call type
+            from app.models.call_type import CallType as CallTypeModel
+            active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).order_by(CallTypeModel.sort_order).all()
+            types_data = [{"key": ct.key, "name": ct.name, "description": ct.description} for ct in active_types]
+
+            if types_data:
+                llm_cls = LLMService(settings.llm)
+                classified_type = await llm_cls.classify_call(segments, types_data, agent_name=call.agent_name)
+                call.call_type = classified_type
+                db.commit()
+                log("info", f"Classified {call.call_id} as: {classified_type}")
+            else:
+                call.call_type = None
+
+            # 5c. LLM analysis — filter rules by call direction + call type
             call_dir = call.direction or "unknown"
             filtered_rules = [
                 r for r in rules_data
-                if r["direction"] == "both" or r["direction"] == call_dir
+                if (r["direction"] == "both" or r["direction"] == call_dir)
+                and (not r.get("call_types") or call.call_type in r.get("call_types", []))
             ]
-            log("info", f"Analyzing {call.call_id} ({call_dir}), {len(filtered_rules)}/{len(rules_data)} rules...")
+            log("info", f"Analyzing {call.call_id} ({call_dir}, {call.call_type}), {len(filtered_rules)}/{len(rules_data)} rules...")
             job.progress = 70
             db.commit()
             _broadcast_job(job)

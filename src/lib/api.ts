@@ -51,6 +51,7 @@ export interface CallSummary {
   rulesFailed: string[];
   compliancePass: boolean;
   direction: string;
+  callType?: string | null;
   isEligible: boolean;
   ineligibleReason?: string | null;
 }
@@ -197,6 +198,7 @@ export interface QARule {
   enabled: boolean;
   is_critical: boolean;
   direction: string;
+  call_types: string[];
   sort_order: number;
 }
 
@@ -415,6 +417,21 @@ export function getAudioUrl(callId: string): string {
   const token = getAuthToken();
   const base = `${API_BASE}/api/calls/${callId}/audio`;
   return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
+
+// ── Call Types ────────────────────────────────────────────
+
+export interface CallTypeInfo {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  sort_order: number;
+}
+
+export async function fetchCallTypes(): Promise<CallTypeInfo[]> {
+  return apiFetch("/api/call-types");
 }
 
 // ── Users ─────────────────────────────────────────────────
