@@ -732,7 +732,7 @@ function LlmDebugPanel({ request, response, classificationDebug }: {
 /* ─── Test Mode Panel ──────────────────────────────────────── */
 
 const DEFAULT_TEST_MODELS = [
-  "google/gemini-3.1-flash",
+  "google/gemini-3.1-flash-lite-preview",
   "openai/gpt-5.4-nano",
 ];
 
