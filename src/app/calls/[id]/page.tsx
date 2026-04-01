@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import CallDetailClient from "./CallDetailClient";
 
 export default function CallDetailPage({
@@ -5,5 +6,9 @@ export default function CallDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  return <CallDetailClient params={params} />;
+  return (
+    <Suspense>
+      <CallDetailClient params={params} />
+    </Suspense>
+  );
 }

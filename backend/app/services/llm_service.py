@@ -249,6 +249,7 @@ class LLMService:
         agent_name: Optional[str] = None,
         log_fn=None,
         job_id: Optional[str] = None,
+        thinking_budget: Optional[int] = None,
     ) -> AnalyzeResponse:
         """
         Send transcript + rules to LLM and return structured QA analysis.
@@ -312,6 +313,11 @@ class LLMService:
             "max_tokens": self.settings.maxTokens,
         }
 
+        if thinking_budget:
+            payload["reasoning"] = {"effort": "high", "max_tokens": thinking_budget}
+            # Extended thinking requires higher max_tokens for the response
+            payload["max_tokens"] = max(self.settings.maxTokens, thinking_budget + 4096)
+
         # Extract unique speaker IDs from transcript to constrain the schema
         speaker_ids = sorted(set(seg["speaker"] for seg in transcript if seg.get("speaker")))
 
@@ -339,11 +345,12 @@ class LLMService:
             )
 
             if response.status_code == 400:
-                # Attempt 2: json_object mode
+                # Attempt 2: json_object mode (strip reasoning if present)
                 mode_used = "json_object"
                 logger.warning(f"json_schema failed (400): {response.text[:300]}. Falling back to json_object...")
+                payload_fallback = {k: v for k, v in payload.items() if k != "reasoning"}
                 payload_json_mode = {
-                    **payload,
+                    **payload_fallback,
                     "response_format": {"type": "json_object"},
                 }
                 response = await client.post(
@@ -351,11 +358,12 @@ class LLMService:
                 )
 
             if response.status_code == 400:
-                # Attempt 3: plain mode
+                # Attempt 3: plain mode (strip reasoning if present)
                 mode_used = "plain"
                 logger.warning(f"json_object failed (400): {response.text[:300]}. Falling back to plain...")
+                payload_plain = {k: v for k, v in payload.items() if k != "reasoning"}
                 response = await client.post(
-                    OPENROUTER_URL, headers=headers, json=payload
+                    OPENROUTER_URL, headers=headers, json=payload_plain
                 )
 
             logger.info(f"LLM response status: {response.status_code}, mode: {mode_used}")

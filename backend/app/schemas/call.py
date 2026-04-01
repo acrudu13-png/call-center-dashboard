@@ -76,6 +76,9 @@ class AnalyzeRequest(BaseModel):
     ruleIds: Optional[list[str]] = None  # If not provided, uses all enabled rules
     mainPrompt: Optional[str] = None
     model: Optional[str] = None  # Override model for test mode
+    temperature: Optional[float] = None
+    maxTokens: Optional[int] = None
+    thinkingBudget: Optional[int] = None  # Enable extended thinking with token budget
     dryRun: bool = False  # If true, don't save results to DB
 
 

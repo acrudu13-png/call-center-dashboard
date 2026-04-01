@@ -38,9 +38,16 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     if not llm_settings.openRouterApiKey:
         raise HTTPException(status_code=400, detail="OpenRouter API key not configured")
 
-    # Override model for test mode
+    # Override settings for test mode
+    overrides: dict = {}
     if payload.model:
-        llm_settings = llm_settings.model_copy(update={"defaultModel": payload.model})
+        overrides["defaultModel"] = payload.model
+    if payload.temperature is not None:
+        overrides["temperature"] = payload.temperature
+    if payload.maxTokens is not None:
+        overrides["maxTokens"] = payload.maxTokens
+    if overrides:
+        llm_settings = llm_settings.model_copy(update=overrides)
 
     llm = LLMService(llm_settings)
 
@@ -130,6 +137,7 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
             transcript, rules_data,
             main_prompt=prompt,
             agent_name=call.agent_name if call else None,
+            thinking_budget=payload.thinkingBudget,
         )
     except Exception as e:
         _add_log(db, "error", f"Reanalysis failed for {call_label}: {e}")

@@ -41,6 +41,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
 import { RotateCcw, Trash2, FlaskConical, Plus, X as XIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 function formatTime(seconds: number) {
   const total = Math.round(seconds);
@@ -750,6 +751,12 @@ function TestModePanel({ callId }: { callId: string }) {
   const [running, setRunning] = useState(false);
   const [expandedModel, setExpandedModel] = useState<string | null>(null);
 
+  // LLM parameters
+  const [temperature, setTemperature] = useState(0.1);
+  const [maxTokens, setMaxTokens] = useState(4096);
+  const [thinkingEnabled, setThinkingEnabled] = useState(false);
+  const [thinkingBudget, setThinkingBudget] = useState(8000);
+
   const addModel = () => {
     const m = newModel.trim();
     if (m && !models.includes(m)) {
@@ -769,12 +776,18 @@ function TestModePanel({ callId }: { callId: string }) {
     const initial: TestResult[] = models.map((m) => ({ model: m, status: "pending" }));
     setResults(initial);
 
-    // Run all models in parallel
     const promises = models.map(async (model, idx) => {
       setResults((prev) => prev.map((r, i) => i === idx ? { ...r, status: "running" } : r));
       const start = Date.now();
       try {
-        const result = await analyzeCall({ callId, model, dryRun: true });
+        const result = await analyzeCall({
+          callId,
+          model,
+          temperature,
+          maxTokens,
+          thinkingBudget: thinkingEnabled ? thinkingBudget : undefined,
+          dryRun: true,
+        });
         const durationMs = Date.now() - start;
         setResults((prev) => prev.map((r, i) => i === idx ? { ...r, status: "done", result, durationMs } : r));
       } catch (e) {
@@ -823,6 +836,55 @@ function TestModePanel({ callId }: { callId: string }) {
           <Button variant="outline" size="sm" onClick={addModel} disabled={!newModel.trim()}>
             <Plus className="h-4 w-4 mr-1" /> Add
           </Button>
+        </div>
+
+        {/* Parameters */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 rounded-lg bg-muted/50 border">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Temperature: {temperature}</Label>
+            <Slider
+              value={[temperature]}
+              onValueChange={([v]) => setTemperature(v)}
+              min={0}
+              max={2}
+              step={0.05}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Max Tokens</Label>
+            <Input
+              type="number"
+              value={maxTokens}
+              onChange={(e) => setMaxTokens(Number(e.target.value))}
+              min={256}
+              max={32768}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-medium flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={thinkingEnabled}
+                onChange={(e) => setThinkingEnabled(e.target.checked)}
+                className="rounded"
+              />
+              Extended Thinking
+            </Label>
+            <Input
+              type="number"
+              value={thinkingBudget}
+              onChange={(e) => setThinkingBudget(Number(e.target.value))}
+              min={1024}
+              max={128000}
+              disabled={!thinkingEnabled}
+              placeholder="Token budget"
+            />
+          </div>
+          <div className="space-y-1 text-xs text-muted-foreground pt-1">
+            <p>Temp 0 = deterministic</p>
+            <p>Temp 1+ = creative</p>
+            <p>Thinking = deeper reasoning</p>
+          </div>
         </div>
 
         {/* Run button */}

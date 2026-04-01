@@ -314,6 +314,9 @@ export async function analyzeCall(params: {
   ruleIds?: string[];
   mainPrompt?: string;
   model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  thinkingBudget?: number;
   dryRun?: boolean;
 }): Promise<AnalyzeResponse> {
   return apiFetch("/api/analyze", {

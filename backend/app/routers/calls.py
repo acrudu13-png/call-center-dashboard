@@ -90,16 +90,16 @@ def list_calls(
     if callType:
         query = query.filter(Call.call_type == callType)
     if dateFrom:
-        from datetime import datetime
+        from datetime import datetime, timedelta, timezone
         try:
-            dt = datetime.fromisoformat(dateFrom)
+            dt = datetime.strptime(dateFrom, "%Y-%m-%d").replace(tzinfo=timezone.utc)
             query = query.filter(Call.date_time >= dt)
         except ValueError:
             pass
     if dateTo:
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         try:
-            dt = datetime.fromisoformat(dateTo) + timedelta(days=1)
+            dt = datetime.strptime(dateTo, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
             query = query.filter(Call.date_time < dt)
         except ValueError:
             pass
