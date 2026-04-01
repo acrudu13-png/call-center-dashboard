@@ -41,8 +41,8 @@ import {
   PhoneIncoming,
   PhoneOutgoing,
 } from "lucide-react";
-import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, fetchCallTypes, bulkReanalyze, type CallSummary, type QARule, type IngestionRunListItem, type CallTypeInfo } from "@/lib/api";
-import { RotateCcw } from "lucide-react";
+import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, fetchCallTypes, bulkReanalyze, stopBulkReanalyze, type CallSummary, type QARule, type IngestionRunListItem, type CallTypeInfo } from "@/lib/api";
+import { RotateCcw, Square } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useIngestionSocket } from "@/lib/useIngestionSocket";
 
@@ -212,6 +212,15 @@ export default function CallsExplorerPage() {
     }
   };
 
+  const handleStopBulkReanalyze = async () => {
+    try {
+      await stopBulkReanalyze();
+      loadCalls();
+    } catch (e) {
+      console.error("Stop bulk reanalyze failed:", e);
+    }
+  };
+
   // Keep bulkAnalyzing in sync with websocket state
   useEffect(() => {
     if (reanalyzingCallIds.size > 0) {
@@ -333,12 +342,12 @@ export default function CallsExplorerPage() {
                 <div className="space-y-1.5">
                   <Label>{t.calls.failedRule}</Label>
                   <Select value={ruleFilter} onValueChange={(v) => v && setRuleFilter(v)}>
-                    <SelectTrigger className="truncate"><SelectValue /></SelectTrigger>
-                    <SelectContent className="max-w-[350px]">
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent className="w-auto min-w-[var(--radix-select-trigger-width)] max-w-[500px]">
                       <SelectItem value="all">{t.common.allRules}</SelectItem>
                       {rules.map((rule) => (
-                        <SelectItem key={rule.rule_id} value={rule.rule_id} title={rule.title}>
-                          <span className="truncate block max-w-[300px]">{rule.title}</span>
+                        <SelectItem key={rule.rule_id} value={rule.rule_id}>
+                          {rule.title}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -485,7 +494,13 @@ export default function CallsExplorerPage() {
 
       {/* Bulk reanalyze */}
       {total > 0 && (
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-end gap-2 pt-2">
+          {bulkAnalyzing && (
+            <Button variant="destructive" size="sm" onClick={handleStopBulkReanalyze}>
+              <Square className="h-3.5 w-3.5 mr-1.5" />
+              {t.common.stop}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleBulkReanalyze} disabled={bulkAnalyzing}>
             {bulkAnalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
             {bulkAnalyzing && lastCallUpdate ? `${t.callDetail.analyzing} (${lastCallUpdate.index}/${lastCallUpdate.total})` : bulkAnalyzing ? t.callDetail.analyzing : hasActiveFilters ? `${t.callDetail.reanalyzeFiltered} (${total})` : `${t.callDetail.reanalyzeAll} (${total})`}

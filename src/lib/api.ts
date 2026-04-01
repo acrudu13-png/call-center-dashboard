@@ -335,6 +335,10 @@ export async function bulkReanalyze(params: {
   return apiFetch(`/api/analyze/bulk?${sp.toString()}`, { method: "POST" });
 }
 
+export async function stopBulkReanalyze(): Promise<{ message: string; reset: number }> {
+  return apiFetch(`/api/analyze/bulk/stop`, { method: "POST" });
+}
+
 // ── Ingestion ─────────────────────────────────────────────
 
 export async function triggerIngestion(source: string = "sftp", remotePath?: string) {

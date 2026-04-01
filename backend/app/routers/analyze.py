@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -17,6 +18,9 @@ from app.ws_manager import manager
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/analyze", tags=["analysis"], dependencies=[Depends(require_role("admin", "manager")), Depends(require_page("calls"))])
+
+# Stop signal for bulk reanalysis
+_bulk_stop_event = asyncio.Event()
 
 
 def _add_log(db, level: str, message: str):
@@ -224,10 +228,31 @@ async def bulk_reanalyze(
     await manager.broadcast("bulk_reanalyze_started", {"callIds": call_ids, "total": total})
 
     # Run in background
-    import asyncio
+    _bulk_stop_event.clear()
     asyncio.create_task(_bulk_reanalyze_bg(call_ids))
 
     return {"message": f"Bulk reanalysis queued for {total} calls", "total": total}
+
+
+@router.post("/bulk/stop")
+async def stop_bulk_reanalyze(db: Session = Depends(get_db)):
+    """Stop ongoing bulk reanalysis and reset remaining calls."""
+    _bulk_stop_event.set()
+
+    # Reset any calls still in "reanalyzing" status back to their previous state
+    stuck = db.query(Call).filter(Call.status == "reanalyzing").all()
+    for c in stuck:
+        c.status = "completed"
+    db.commit()
+
+    _add_log(db, "info", f"Bulk reanalysis stopped. Reset {len(stuck)} calls.")
+    await manager.broadcast("log", {
+        "timestamp": utcnow().isoformat(), "level": "info",
+        "source": "analysis", "message": f"Bulk reanalysis stopped. Reset {len(stuck)} calls.",
+    })
+    await manager.broadcast("bulk_reanalyze_done", {"total": 0, "stopped": True})
+
+    return {"message": f"Stopped. Reset {len(stuck)} calls.", "reset": len(stuck)}
 
 
 async def _bulk_reanalyze_bg(call_ids: list[str]):
@@ -255,11 +280,15 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
 
     async def _reanalyze_one(call_id: str):
         nonlocal completed_count
+        if _bulk_stop_event.is_set():
+            return
         async with semaphore:
+            if _bulk_stop_event.is_set():
+                return
             db = SessionLocal()
             try:
                 call = db.query(Call).filter(Call.id == call_id).first()
-                if not call:
+                if not call or call.status != "reanalyzing":
                     return
 
                 llm_settings = get_setting(db, "llm", LlmSettings)
