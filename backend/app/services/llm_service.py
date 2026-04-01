@@ -369,9 +369,9 @@ class LLMService:
             logger.info(f"LLM response status: {response.status_code}, mode: {mode_used}")
 
             if response.status_code != 200:
-                logger.error(f"=== LLM ERROR ===\nStatus: {response.status_code}\nBody: {response.text[:2000]}")
-
-            response.raise_for_status()
+                error_body = response.text[:2000]
+                logger.error(f"=== LLM ERROR ===\nModel: {self.settings.defaultModel}\nStatus: {response.status_code}\nMode: {mode_used}\nBody: {error_body}")
+                raise ValueError(f"OpenRouter {response.status_code} ({self.settings.defaultModel}, mode={mode_used}): {error_body}")
             data = response.json()
 
         content = data["choices"][0]["message"]["content"]
