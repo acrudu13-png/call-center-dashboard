@@ -245,8 +245,27 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
                 continue
 
             call_dir = call.direction if call else "unknown"
+
+            # Classify call type (same as single reanalyze)
+            from app.models.call_type import CallType as CallTypeModel
+            call_type_key = None
+            active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).order_by(CallTypeModel.sort_order).all()
+            types_data = [{"key": ct.key, "name": ct.name, "description": ct.description} for ct in active_types]
+
+            llm = LLMService(llm_settings)
+
+            if types_data:
+                call_type_key, cls_debug = await llm.classify_call(transcript, types_data, agent_name=call.agent_name)
+                call.call_type = call_type_key
+                from sqlalchemy.orm.attributes import flag_modified as _fm
+                rj = dict(call.raw_json or {})
+                rj["classification_debug"] = cls_debug
+                call.raw_json = rj
+                _fm(call, "raw_json")
+
             rules = db.query(QARule).filter(QARule.enabled == True).order_by(QARule.sort_order).all()
             rules = [r for r in rules if r.direction == "both" or r.direction == call_dir]
+            rules = [r for r in rules if not r.call_types or (call_type_key and call_type_key in r.call_types)]
 
             rules_data = [
                 {"rule_id": r.rule_id, "title": r.title, "description": r.description,
@@ -257,7 +276,6 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
             main_prompt_setting = get_setting(db, "main_prompt", MainPrompt)
             prompt = main_prompt_setting.prompt or None
 
-            llm = LLMService(llm_settings)
             result = await llm.analyze_call(transcript, rules_data, main_prompt=prompt, agent_name=call.agent_name)
 
             call.qa_score = result.overallScore
@@ -309,3 +327,34 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Bulk reanalysis complete: {len(call_ids)} calls",
     })
+
+
+@router.post("/recalculate-scores")
+async def recalculate_scores(db: Session = Depends(get_db)):
+    """Recalculate ai_total_earned, ai_total_possible, and qa_score from stored scorecard entries."""
+    from sqlalchemy import func
+
+    calls_with_scores = (
+        db.query(
+            ScorecardEntry.call_id,
+            func.sum(ScorecardEntry.score).label("total_earned"),
+            func.sum(ScorecardEntry.max_score).label("total_possible"),
+        )
+        .group_by(ScorecardEntry.call_id)
+        .all()
+    )
+
+    updated = 0
+    for call_id, total_earned, total_possible in calls_with_scores:
+        call = db.query(Call).filter(Call.id == call_id).first()
+        if not call:
+            continue
+        overall = (total_earned / total_possible * 100) if total_possible > 0 else 0
+        call.ai_total_earned = total_earned
+        call.ai_total_possible = total_possible
+        call.qa_score = overall
+        updated += 1
+
+    db.commit()
+    _add_log(db, "info", f"Recalculated scores for {updated} calls from scorecard entries")
+    return {"message": f"Recalculated scores for {updated} calls", "updated": updated}
