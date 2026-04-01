@@ -110,6 +110,8 @@ export async function fetchCalls(params: {
   runId?: string;
   direction?: string;
   callType?: string;
+  dateFrom?: string;
+  dateTo?: string;
 } = {}): Promise<CallListResponse> {
   const sp = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
@@ -311,11 +313,40 @@ export async function analyzeCall(params: {
   transcript?: TranscriptLine[];
   ruleIds?: string[];
   mainPrompt?: string;
-}) {
+  model?: string;
+  dryRun?: boolean;
+}): Promise<AnalyzeResponse> {
   return apiFetch("/api/analyze", {
     method: "POST",
     body: JSON.stringify(params),
   });
+}
+
+export interface AnalyzeResponse {
+  summary: string;
+  improvementAdvice: string[];
+  grade: string;
+  overallScore: number;
+  totalEarned: number;
+  totalPossible: number;
+  results: ScorecardEntry[];
+  hasCriticalFailure: boolean;
+  criticalFailureReason?: string | null;
+  isEligible: boolean;
+  ineligibleReason?: string | null;
+  speakerMap: Record<string, string>;
+  llmRequest?: string | null;
+  llmResponse?: string | null;
+}
+
+export interface ScorecardEntry {
+  ruleId: string;
+  ruleTitle: string;
+  passed: boolean;
+  score: number;
+  maxScore: number;
+  details: string;
+  extractedValue?: string | null;
 }
 
 export async function bulkReanalyze(params: {

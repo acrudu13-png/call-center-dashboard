@@ -70,6 +70,8 @@ def list_calls(
     runId: Optional[str] = None,
     direction: Optional[str] = None,
     callType: Optional[str] = None,
+    dateFrom: Optional[str] = None,
+    dateTo: Optional[str] = None,
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -87,6 +89,20 @@ def list_calls(
         query = query.filter(Call.direction == direction)
     if callType:
         query = query.filter(Call.call_type == callType)
+    if dateFrom:
+        from datetime import datetime
+        try:
+            dt = datetime.fromisoformat(dateFrom)
+            query = query.filter(Call.date_time >= dt)
+        except ValueError:
+            pass
+    if dateTo:
+        from datetime import datetime, timedelta
+        try:
+            dt = datetime.fromisoformat(dateTo) + timedelta(days=1)
+            query = query.filter(Call.date_time < dt)
+        except ValueError:
+            pass
     if search:
         pattern = f"%{search}%"
         query = query.filter(

@@ -36,10 +36,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Slider } from "@/components/ui/slider";
-import { fetchCall, getAudioUrl, analyzeCall, deleteCall, fetchCallTypes, type CallDetail, type CallTypeInfo } from "@/lib/api";
-import { useRouter } from "next/navigation";
+import { fetchCall, getAudioUrl, analyzeCall, deleteCall, fetchCallTypes, type CallDetail, type CallTypeInfo, type AnalyzeResponse } from "@/lib/api";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
-import { RotateCcw, Trash2 } from "lucide-react";
+import { RotateCcw, Trash2, FlaskConical, Plus, X as XIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 function formatTime(seconds: number) {
   const total = Math.round(seconds);
@@ -87,6 +88,8 @@ export default function CallDetailClient({
   const [deleting, setDeleting] = useState(false);
   const [callTypes, setCallTypes] = useState<CallTypeInfo[]>([]);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isTestMode = searchParams.get("test-mode") === "true";
   const { t } = useTranslation();
 
   // Cleanup audio on unmount
@@ -593,6 +596,11 @@ export default function CallDetailClient({
           classificationDebug={(call.rawJson?.classification_debug || null) as Record<string, string> | null}
         />
       )}
+
+      {/* Test Mode Panel */}
+      {isTestMode && (
+        <TestModePanel callId={id} />
+      )}
     </div>
   );
 }
@@ -716,6 +724,256 @@ function LlmDebugPanel({ request, response, classificationDebug }: {
           </ScrollArea>
         </CardContent>
       )}
+    </Card>
+  );
+}
+
+/* ─── Test Mode Panel ──────────────────────────────────────── */
+
+const DEFAULT_TEST_MODELS = [
+  "google/gemini-3.1-flash",
+  "openai/gpt-5.4-nano",
+];
+
+interface TestResult {
+  model: string;
+  status: "pending" | "running" | "done" | "error";
+  result?: AnalyzeResponse;
+  error?: string;
+  durationMs?: number;
+}
+
+function TestModePanel({ callId }: { callId: string }) {
+  const [models, setModels] = useState<string[]>([...DEFAULT_TEST_MODELS]);
+  const [newModel, setNewModel] = useState("");
+  const [results, setResults] = useState<TestResult[]>([]);
+  const [running, setRunning] = useState(false);
+  const [expandedModel, setExpandedModel] = useState<string | null>(null);
+
+  const addModel = () => {
+    const m = newModel.trim();
+    if (m && !models.includes(m)) {
+      setModels([...models, m]);
+    }
+    setNewModel("");
+  };
+
+  const removeModel = (model: string) => {
+    setModels(models.filter((m) => m !== model));
+    setResults(results.filter((r) => r.model !== model));
+  };
+
+  const runTests = async () => {
+    setRunning(true);
+    setExpandedModel(null);
+    const initial: TestResult[] = models.map((m) => ({ model: m, status: "pending" }));
+    setResults(initial);
+
+    // Run all models in parallel
+    const promises = models.map(async (model, idx) => {
+      setResults((prev) => prev.map((r, i) => i === idx ? { ...r, status: "running" } : r));
+      const start = Date.now();
+      try {
+        const result = await analyzeCall({ callId, model, dryRun: true });
+        const durationMs = Date.now() - start;
+        setResults((prev) => prev.map((r, i) => i === idx ? { ...r, status: "done", result, durationMs } : r));
+      } catch (e) {
+        const durationMs = Date.now() - start;
+        setResults((prev) => prev.map((r, i) => i === idx ? { ...r, status: "error", error: String(e), durationMs } : r));
+      }
+    });
+
+    await Promise.all(promises);
+    setRunning(false);
+  };
+
+  return (
+    <Card className="border-2 border-purple-300 dark:border-purple-700">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FlaskConical className="h-5 w-5 text-purple-500" />
+          Test Mode — Model Comparison
+        </CardTitle>
+        <CardDescription>
+          Run this call through multiple models without saving results. Compare scores, grades, and responses side by side.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Model list */}
+        <div className="flex flex-wrap gap-2">
+          {models.map((model) => (
+            <Badge key={model} variant="secondary" className="text-sm py-1 px-3 gap-1.5">
+              {model}
+              <button onClick={() => removeModel(model)} className="hover:text-destructive">
+                <XIcon className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+
+        {/* Add model */}
+        <div className="flex gap-2">
+          <Input
+            placeholder="openrouter model id (e.g. meta-llama/llama-4-scout)"
+            value={newModel}
+            onChange={(e) => setNewModel(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addModel()}
+            className="flex-1"
+          />
+          <Button variant="outline" size="sm" onClick={addModel} disabled={!newModel.trim()}>
+            <Plus className="h-4 w-4 mr-1" /> Add
+          </Button>
+        </div>
+
+        {/* Run button */}
+        <Button onClick={runTests} disabled={running || models.length === 0} className="bg-purple-600 hover:bg-purple-700">
+          {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FlaskConical className="h-4 w-4 mr-2" />}
+          {running ? "Running tests..." : `Run ${models.length} model${models.length > 1 ? "s" : ""}`}
+        </Button>
+
+        {/* Results */}
+        {results.length > 0 && (
+          <div className="space-y-3 pt-2 border-t">
+            {/* Summary table */}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Score</TableHead>
+                  <TableHead>Grade</TableHead>
+                  <TableHead>Points</TableHead>
+                  <TableHead>Critical</TableHead>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {results.map((r) => (
+                  <TableRow
+                    key={r.model}
+                    className={`cursor-pointer ${expandedModel === r.model ? "bg-muted" : ""}`}
+                    onClick={() => setExpandedModel(expandedModel === r.model ? null : r.model)}
+                  >
+                    <TableCell className="font-mono text-xs">{r.model}</TableCell>
+                    <TableCell>
+                      {r.result ? (
+                        <Badge variant={r.result.overallScore >= 85 ? "default" : r.result.overallScore >= 70 ? "secondary" : "destructive"}>
+                          {Math.round(r.result.overallScore)}%
+                        </Badge>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell>{r.result?.grade || "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {r.result ? `${r.result.totalEarned}/${r.result.totalPossible}` : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {r.result ? (
+                        r.result.hasCriticalFailure
+                          ? <Badge variant="destructive">Yes</Badge>
+                          : <Badge variant="outline">No</Badge>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s` : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {r.status === "pending" && <span className="text-xs text-muted-foreground">Pending</span>}
+                      {r.status === "running" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      {r.status === "done" && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
+                      {r.status === "error" && <XCircle className="h-3.5 w-3.5 text-red-500" />}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {/* Expanded detail for selected model */}
+            {expandedModel && (() => {
+              const r = results.find((r) => r.model === expandedModel);
+              if (!r) return null;
+
+              if (r.status === "error") {
+                return (
+                  <Card className="border-destructive/50">
+                    <CardContent className="pt-4">
+                      <pre className="text-xs text-red-500 whitespace-pre-wrap">{r.error}</pre>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              if (!r.result) return null;
+
+              return (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center justify-between">
+                      <span className="font-mono">{r.model}</span>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={r.result.overallScore >= 85 ? "default" : r.result.overallScore >= 70 ? "secondary" : "destructive"}>
+                          {Math.round(r.result.overallScore)}%
+                        </Badge>
+                        <span className="text-xs text-muted-foreground font-normal">{r.result.grade}</span>
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Summary */}
+                    <div>
+                      <h4 className="text-xs font-semibold text-muted-foreground mb-1">Summary</h4>
+                      <p className="text-sm">{r.result.summary}</p>
+                    </div>
+
+                    {/* Improvements */}
+                    {r.result.improvementAdvice.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-semibold text-muted-foreground mb-1">Improvements</h4>
+                        <ol className="text-sm list-decimal pl-4 space-y-1">
+                          {r.result.improvementAdvice.map((adv, i) => <li key={i}>{adv}</li>)}
+                        </ol>
+                      </div>
+                    )}
+
+                    {/* Rule scores */}
+                    <div>
+                      <h4 className="text-xs font-semibold text-muted-foreground mb-2">Rule Scores</h4>
+                      <div className="space-y-1">
+                        {r.result.results.filter(s => s.maxScore > 0).map((s) => (
+                          <div key={s.ruleId} className="flex items-start gap-2 text-sm">
+                            {s.passed
+                              ? <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                              : <XCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                            }
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium truncate">{s.ruleTitle}</span>
+                                <span className="font-mono text-xs text-muted-foreground shrink-0 ml-2">{s.score}/{s.maxScore}</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">{s.details}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Raw response */}
+                    {r.result.llmResponse && (
+                      <details className="text-xs">
+                        <summary className="cursor-pointer text-muted-foreground font-semibold">Raw LLM Response</summary>
+                        <ScrollArea className="h-[300px] mt-2">
+                          <pre className="font-mono whitespace-pre-wrap break-all bg-muted p-3 rounded-lg">
+                            {(() => { try { return JSON.stringify(JSON.parse(r.result!.llmResponse!), null, 2); } catch { return r.result!.llmResponse; } })()}
+                          </pre>
+                        </ScrollArea>
+                      </details>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
+          </div>
+        )}
+      </CardContent>
     </Card>
   );
 }

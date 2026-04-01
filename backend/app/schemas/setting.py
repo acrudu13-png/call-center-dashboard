@@ -24,6 +24,15 @@ class LlmSettings(BaseModel):
     defaultModel: str = "anthropic/claude-4.6-sonnet"
     temperature: float = 0.1
     maxTokens: int = 4096
+    availableModels: list[str] = [
+        "anthropic/claude-4.6-sonnet",
+        "anthropic/claude-4.5-opus",
+        "google/gemini-3.1-pro",
+        "google/gemini-3.0-ultra",
+        "openai/gpt-5.3-pro",
+        "openai/gpt-5.2-mini",
+        "meta-llama/llama-4-70b",
+    ]
 
 
 class SonioxSettings(BaseModel):

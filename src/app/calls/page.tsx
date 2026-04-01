@@ -121,6 +121,8 @@ export default function CallsExplorerPage() {
         agentId: agentFilter !== "all" ? agentFilter : undefined,
         direction: directionFilter !== "all" ? directionFilter : undefined,
         callType: callTypeFilter !== "all" ? callTypeFilter : undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
       });
       setCalls(res.calls);
       setTotal(res.total);
@@ -130,7 +132,7 @@ export default function CallsExplorerPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, sortKey, sortDir, statusFilter, minScore, maxScore, runFilter, agentFilter, directionFilter, callTypeFilter]);
+  }, [page, pageSize, search, sortKey, sortDir, statusFilter, minScore, maxScore, runFilter, agentFilter, directionFilter, callTypeFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     loadCalls();

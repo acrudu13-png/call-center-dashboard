@@ -75,6 +75,8 @@ class AnalyzeRequest(BaseModel):
     transcript: Optional[list[TranscriptLineSchema]] = None  # If not provided, uses stored transcript
     ruleIds: Optional[list[str]] = None  # If not provided, uses all enabled rules
     mainPrompt: Optional[str] = None
+    model: Optional[str] = None  # Override model for test mode
+    dryRun: bool = False  # If true, don't save results to DB
 
 
 class AnalyzeResponse(BaseModel):

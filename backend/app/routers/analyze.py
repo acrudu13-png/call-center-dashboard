@@ -38,6 +38,10 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     if not llm_settings.openRouterApiKey:
         raise HTTPException(status_code=400, detail="OpenRouter API key not configured")
 
+    # Override model for test mode
+    if payload.model:
+        llm_settings = llm_settings.model_copy(update={"defaultModel": payload.model})
+
     llm = LLMService(llm_settings)
 
     # Resolve call
@@ -45,6 +49,15 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         (Call.id == payload.callId) | (Call.call_id == payload.callId)
     ).first()
     call_label = call.call_id if call else payload.callId
+
+    # Prevent concurrent reanalysis of the same call (skip check for dry runs)
+    if not payload.dryRun and call and call.status in ("reanalyzing", "processing"):
+        raise HTTPException(status_code=409, detail=f"Call {call_label} is already being analyzed")
+
+    # Mark as reanalyzing (only for real runs)
+    if not payload.dryRun and call:
+        call.status = "reanalyzing"
+        db.commit()
 
     # Log start
     _add_log(db, "info", f"Reanalysis started for {call_label}")
@@ -126,8 +139,8 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         })
         raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
 
-    # Save results to the call record
-    if call:
+    # Save results to the call record (skip for dry runs / test mode)
+    if call and not payload.dryRun:
         call.qa_score = result.overallScore
         call.ai_summary = result.summary
         call.ai_grade = result.grade
@@ -160,12 +173,11 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
             ))
         db.commit()
 
-    # Log completion
-    _add_log(db, "info", f"Reanalysis complete for {call_label}: {result.grade} ({result.overallScore}%)")
-    await manager.broadcast("log", {
-        "timestamp": utcnow().isoformat(), "level": "info",
-        "source": "analysis", "message": f"Reanalysis complete for {call_label}: {result.grade} ({result.overallScore}%)",
-    })
+        _add_log(db, "info", f"Reanalysis complete for {call_label}: {result.grade} ({round(result.overallScore, 1)}%)")
+        await manager.broadcast("log", {
+            "timestamp": utcnow().isoformat(), "level": "info",
+            "source": "analysis", "message": f"Reanalysis complete for {call_label}: {result.grade} ({round(result.overallScore, 1)}%)",
+        })
 
     return result
 
@@ -370,7 +382,7 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
                 await manager.broadcast("log", {
                     "timestamp": utcnow().isoformat(), "level": "info",
                     "source": "analysis",
-                    "message": f"[{idx}/{len(call_ids)}] Reanalyzed {call.call_id}: {result.grade} ({result.overallScore}%)",
+                    "message": f"[{idx}/{len(call_ids)}] Reanalyzed {call.call_id}: {result.grade} ({round(result.overallScore, 1)}%)",
                 })
                 await manager.broadcast("call_updated", {
                     "callId": call.id,
