@@ -144,6 +144,24 @@ class LLMService:
             "Content-Type": "application/json",
         }
 
+        valid_keys = [ct["key"] for ct in call_types]
+        classification_schema = {
+            "name": "call_classification",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "enum": valid_keys,
+                        "description": "The category key that best matches the call",
+                    },
+                },
+                "required": ["category"],
+                "additionalProperties": False,
+            },
+        }
+
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.post(
@@ -154,7 +172,10 @@ class LLMService:
                         "messages": messages,
                         "temperature": 1,
                         "max_completion_tokens": 500,
-                        "reasoning": {"effort": "low"},
+                        "response_format": {
+                            "type": "json_schema",
+                            "json_schema": classification_schema,
+                        },
                     },
                 )
                 debug["http_status"] = str(response.status_code)
@@ -164,33 +185,20 @@ class LLMService:
                     return "other", debug
                 data = response.json()
                 message = data.get("choices", [{}])[0].get("message", {})
-                content = message.get("content")
-                reasoning = message.get("reasoning") or ""
+                content = message.get("content") or ""
                 debug["content"] = repr(content)
-                debug["reasoning"] = reasoning[:500]
 
-                # Extract answer: prefer content, fall back to reasoning
-                if content:
-                    raw_result = content.strip()
-                elif reasoning:
-                    # Search for a valid key in the reasoning text
-                    valid_keys = {ct["key"] for ct in call_types}
-                    reasoning_lower = reasoning.lower()
-                    for key in valid_keys:
-                        if key in reasoning_lower:
-                            raw_result = key
-                            break
-                    else:
-                        raw_result = "other"
-                else:
-                    return "other", debug
+                try:
+                    parsed = json.loads(content)
+                    result = parsed.get("category", "other").lower().strip()
+                except (json.JSONDecodeError, AttributeError):
+                    result = content.strip().lower().strip('"').strip("'").strip()
 
-                result = raw_result.lower().strip('"').strip("'").strip()
-                valid_keys = {ct["key"] for ct in call_types}
-                if result in valid_keys:
+                valid_keys_set = {ct["key"] for ct in call_types}
+                if result in valid_keys_set:
                     debug["result"] = result
                     return result, debug
-                for key in valid_keys:
+                for key in valid_keys_set:
                     if key in result:
                         debug["result"] = key
                         return key, debug
