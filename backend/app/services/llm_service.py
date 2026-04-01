@@ -439,13 +439,18 @@ class LLMService:
         }, indent=2, ensure_ascii=False)
         debug_response = content
 
+        # Compute totals from individual scores instead of trusting LLM arithmetic
+        computed_total_earned = sum(r["score"] for r in ordered_results)
+        computed_total_possible = sum(r["maxScore"] for r in ordered_results)
+        computed_overall_score = (computed_total_earned / computed_total_possible * 100) if computed_total_possible > 0 else 0
+
         return AnalyzeResponse(
             summary=result["summary"],
             improvementAdvice=result.get("improvementAdvice", [])[:4],
             grade=result["grade"],
-            overallScore=result["overallScore"],
-            totalEarned=result["totalEarned"],
-            totalPossible=result["totalPossible"],
+            overallScore=computed_overall_score,
+            totalEarned=computed_total_earned,
+            totalPossible=computed_total_possible,
             results=[
                 ScorecardEntrySchema(
                     ruleId=r["ruleId"],
