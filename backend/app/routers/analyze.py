@@ -329,32 +329,3 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
     })
 
 
-@router.post("/recalculate-scores")
-async def recalculate_scores(db: Session = Depends(get_db)):
-    """Recalculate ai_total_earned, ai_total_possible, and qa_score from stored scorecard entries."""
-    from sqlalchemy import func
-
-    calls_with_scores = (
-        db.query(
-            ScorecardEntry.call_id,
-            func.sum(ScorecardEntry.score).label("total_earned"),
-            func.sum(ScorecardEntry.max_score).label("total_possible"),
-        )
-        .group_by(ScorecardEntry.call_id)
-        .all()
-    )
-
-    updated = 0
-    for call_id, total_earned, total_possible in calls_with_scores:
-        call = db.query(Call).filter(Call.id == call_id).first()
-        if not call:
-            continue
-        overall = (total_earned / total_possible * 100) if total_possible > 0 else 0
-        call.ai_total_earned = total_earned
-        call.ai_total_possible = total_possible
-        call.qa_score = overall
-        updated += 1
-
-    db.commit()
-    _add_log(db, "info", f"Recalculated scores for {updated} calls from scorecard entries")
-    return {"message": f"Recalculated scores for {updated} calls", "updated": updated}
