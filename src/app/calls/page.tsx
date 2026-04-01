@@ -295,7 +295,11 @@ export default function CallsExplorerPage() {
                 <div className="space-y-1.5">
                   <Label>{t.common.agent}</Label>
                   <Select value={agentFilter} onValueChange={(v) => v && setAgentFilter(v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue>
+                        {agentFilter === "all" ? t.common.allAgents : (() => { const a = agents.find(a => a.agentId === agentFilter); return a ? `${a.agentName} (${a.callCount})` : agentFilter; })()}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t.common.allAgents}</SelectItem>
                       {agents.map((agent) => (
@@ -320,7 +324,11 @@ export default function CallsExplorerPage() {
                 <div className="space-y-1.5">
                   <Label>{t.calls.callType}</Label>
                   <Select value={callTypeFilter} onValueChange={(v) => v && setCallTypeFilter(v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue>
+                        {callTypeFilter === "all" ? t.common.allCallTypes : callTypesList.find(ct => ct.key === callTypeFilter)?.name || callTypeFilter}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t.common.allCallTypes}</SelectItem>
                       {callTypesList.map((ct) => (
@@ -342,7 +350,11 @@ export default function CallsExplorerPage() {
                 <div className="space-y-1.5">
                   <Label>{t.calls.failedRule}</Label>
                   <Select value={ruleFilter} onValueChange={(v) => v && setRuleFilter(v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue>
+                        {ruleFilter === "all" ? t.common.allRules : rules.find(r => r.rule_id === ruleFilter)?.title || ruleFilter}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent className="w-auto min-w-[var(--radix-select-trigger-width)] max-w-[500px]">
                       <SelectItem value="all">{t.common.allRules}</SelectItem>
                       {rules.map((rule) => (
@@ -356,7 +368,11 @@ export default function CallsExplorerPage() {
                 <div className="space-y-1.5">
                   <Label>{t.calls.ingestionRun}</Label>
                   <Select value={runFilter} onValueChange={(v) => v && setRunFilter(v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue>
+                        {runFilter === "all" ? t.common.allRuns : (() => { const r = ingestionRuns.find(r => r.runId === runFilter); return r ? `${r.dateLabel || r.runId} (${r.processedFiles}/${r.totalFiles})` : runFilter; })()}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t.common.allRuns}</SelectItem>
                       {ingestionRuns.map((run) => (
