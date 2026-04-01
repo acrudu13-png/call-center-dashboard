@@ -5,6 +5,15 @@ import type { IngestionRun, LogEntry, Job } from "@/lib/api";
 import { WS_URL } from "@/lib/config";
 const RECONNECT_DELAY = 2000;
 
+export interface CallUpdateEvent {
+  callId: string;
+  status: string;
+  qaScore?: number;
+  callType?: string;
+  index: number;
+  total: number;
+}
+
 export interface IngestionSocketState {
   /** Latest ingestion run progress (updated in real time) */
   run: IngestionRun | null;
@@ -14,6 +23,10 @@ export interface IngestionSocketState {
   jobs: Map<string, Job>;
   /** WebSocket connection status */
   connected: boolean;
+  /** Call IDs currently being reanalyzed */
+  reanalyzingCallIds: Set<string>;
+  /** Latest call update event */
+  lastCallUpdate: CallUpdateEvent | null;
 }
 
 type Listener = (state: IngestionSocketState) => void;
@@ -30,6 +43,8 @@ class IngestionSocket {
     logs: [],
     jobs: new Map(),
     connected: false,
+    reanalyzingCallIds: new Set(),
+    lastCallUpdate: null,
   };
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private mounted = 0;
@@ -159,6 +174,36 @@ class IngestionSocket {
       this.state = { ...this.state, jobs: newJobs };
       this.notify();
     }
+
+    if (type === "bulk_reanalyze_started") {
+      const ids = new Set<string>(data.callIds as string[]);
+      this.state = { ...this.state, reanalyzingCallIds: ids };
+      this.notify();
+    }
+
+    if (type === "call_updated") {
+      const callId = data.callId as string;
+      const newSet = new Set(this.state.reanalyzingCallIds);
+      newSet.delete(callId);
+      this.state = {
+        ...this.state,
+        reanalyzingCallIds: newSet,
+        lastCallUpdate: {
+          callId,
+          status: data.status as string,
+          qaScore: data.qaScore as number | undefined,
+          callType: data.callType as string | undefined,
+          index: data.index as number,
+          total: data.total as number,
+        },
+      };
+      this.notify();
+    }
+
+    if (type === "bulk_reanalyze_done") {
+      this.state = { ...this.state, reanalyzingCallIds: new Set(), lastCallUpdate: null };
+      this.notify();
+    }
   }
 }
 
@@ -175,6 +220,8 @@ export function useIngestionSocket(): IngestionSocketState {
     logs: [],
     jobs: new Map(),
     connected: false,
+    reanalyzingCallIds: new Set(),
+    lastCallUpdate: null,
   });
 
   useEffect(() => {

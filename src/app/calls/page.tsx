@@ -44,6 +44,7 @@ import {
 import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, fetchCallTypes, bulkReanalyze, type CallSummary, type QARule, type IngestionRunListItem, type CallTypeInfo } from "@/lib/api";
 import { RotateCcw } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { useIngestionSocket } from "@/lib/useIngestionSocket";
 
 function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -82,6 +83,7 @@ export default function CallsExplorerPage() {
   const [bulkAnalyzing, setBulkAnalyzing] = useState(false);
   const [rules, setRules] = useState<QARule[]>([]);
   const [callTypesList, setCallTypesList] = useState<CallTypeInfo[]>([]);
+  const { reanalyzingCallIds, lastCallUpdate } = useIngestionSocket();
 
   function getQAStatus(score: number): "Passed" | "Average" | "Failed" {
     if (score >= 85) return "Passed";
@@ -131,6 +133,13 @@ export default function CallsExplorerPage() {
   useEffect(() => {
     loadCalls();
   }, [loadCalls]);
+
+  // Refresh calls list when a call finishes reanalyzing
+  useEffect(() => {
+    if (lastCallUpdate) {
+      loadCalls();
+    }
+  }, [lastCallUpdate, loadCalls]);
 
   // Reset page on filter change
   useEffect(() => {
@@ -192,12 +201,21 @@ export default function CallsExplorerPage() {
         runId: runFilter !== "all" ? runFilter : undefined,
         direction: directionFilter !== "all" ? directionFilter : undefined,
       });
+      loadCalls(); // refresh to show "reanalyzing" status
     } catch (e) {
       console.error("Bulk reanalyze failed:", e);
-    } finally {
       setBulkAnalyzing(false);
     }
   };
+
+  // Keep bulkAnalyzing in sync with websocket state
+  useEffect(() => {
+    if (reanalyzingCallIds.size > 0) {
+      setBulkAnalyzing(true);
+    } else if (reanalyzingCallIds.size === 0) {
+      setBulkAnalyzing(false);
+    }
+  }, [reanalyzingCallIds.size]);
 
   const startItem = (page - 1) * pageSize + 1;
   const endItem = Math.min(page * pageSize, total);
@@ -391,9 +409,16 @@ export default function CallsExplorerPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={call.status === "completed" ? "default" : call.status === "flagged" || call.status === "failed" ? "destructive" : "secondary"}>
-                      {call.status}
-                    </Badge>
+                    {call.status === "reanalyzing" || reanalyzingCallIds.has(call.id) ? (
+                      <Badge variant="secondary" className="text-xs gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        {t.callDetail.reanalyzing}
+                      </Badge>
+                    ) : (
+                      <Badge variant={call.status === "completed" ? "default" : call.status === "flagged" || call.status === "failed" ? "destructive" : "secondary"}>
+                        {call.status}
+                      </Badge>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -445,7 +470,7 @@ export default function CallsExplorerPage() {
         <div className="flex justify-end pt-2">
           <Button variant="outline" size="sm" onClick={handleBulkReanalyze} disabled={bulkAnalyzing}>
             {bulkAnalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
-            {bulkAnalyzing ? "Se analizeaza..." : hasActiveFilters ? `Reanalizeaza ${total} filtrate` : `Reanalizeaza toate (${total})`}
+            {bulkAnalyzing && lastCallUpdate ? `${t.callDetail.analyzing} (${lastCallUpdate.index}/${lastCallUpdate.total})` : bulkAnalyzing ? t.callDetail.analyzing : hasActiveFilters ? `${t.callDetail.reanalyzeFiltered} (${total})` : `${t.callDetail.reanalyzeAll} (${total})`}
           </Button>
         </div>
       )}

@@ -179,7 +179,7 @@ async def bulk_reanalyze(
 ):
     """Queue bulk reanalysis for all matching calls. Runs in background."""
     from fastapi import BackgroundTasks
-    query = db.query(Call).filter(Call.status != "processing")
+    query = db.query(Call).filter(Call.status.notin_(["processing", "reanalyzing"]))
 
     if status:
         query = query.filter(Call.status == status)
@@ -201,17 +201,24 @@ async def bulk_reanalyze(
     if maxScore is not None:
         query = query.filter(Call.qa_score <= maxScore)
 
-    call_ids = [c.id for c in query.all()]
+    calls_list = query.all()
+    call_ids = [c.id for c in calls_list]
     total = len(call_ids)
 
     if total == 0:
         return {"message": "No calls match the filters", "total": 0}
+
+    # Mark all calls as "reanalyzing" so the UI can show progress
+    for c in calls_list:
+        c.status = "reanalyzing"
+    db.commit()
 
     _add_log(db, "info", f"Bulk reanalysis started for {total} calls")
     await manager.broadcast("log", {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Bulk reanalysis started for {total} calls",
     })
+    await manager.broadcast("bulk_reanalyze_started", {"callIds": call_ids, "total": total})
 
     # Run in background
     import asyncio
@@ -313,12 +320,32 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
                 "source": "analysis",
                 "message": f"[{i+1}/{len(call_ids)}] Reanalyzed {call.call_id}: {result.grade} ({result.overallScore}%)",
             })
+            await manager.broadcast("call_updated", {
+                "callId": call.id,
+                "status": call.status,
+                "qaScore": call.qa_score,
+                "callType": call.call_type,
+                "index": i + 1,
+                "total": len(call_ids),
+            })
 
         except Exception as e:
             logger.error(f"Bulk reanalysis failed for {call_id}: {e}")
+            db2 = SessionLocal()
+            try:
+                failed_call = db2.query(Call).filter(Call.id == call_id).first()
+                if failed_call:
+                    failed_call.status = "failed"
+                    db2.commit()
+            finally:
+                db2.close()
             await manager.broadcast("log", {
                 "timestamp": utcnow().isoformat(), "level": "error",
                 "source": "analysis", "message": f"Bulk reanalysis failed for call {call_id}: {e}",
+            })
+            await manager.broadcast("call_updated", {
+                "callId": call_id, "status": "failed",
+                "index": i + 1, "total": len(call_ids),
             })
         finally:
             db.close()
@@ -327,5 +354,6 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Bulk reanalysis complete: {len(call_ids)} calls",
     })
+    await manager.broadcast("bulk_reanalyze_done", {"total": len(call_ids)})
 
 
