@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from typing import Optional
@@ -168,52 +169,77 @@ class LLMService:
             },
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.post(
-                    OPENROUTER_URL,
-                    headers=headers,
-                    json={
-                        "model": "openai/gpt-5-nano",
-                        "messages": messages,
-                        "temperature": 1,
-                        "max_completion_tokens": 500,
-                        "response_format": {
-                            "type": "json_schema",
-                            "json_schema": classification_schema,
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    response = await client.post(
+                        OPENROUTER_URL,
+                        headers=headers,
+                        json={
+                            "model": "openai/gpt-5-nano",
+                            "messages": messages,
+                            "temperature": 0,
+                            "max_completion_tokens": 2000,
+                            "response_format": {
+                                "type": "json_schema",
+                                "json_schema": classification_schema,
+                            },
                         },
-                    },
-                )
-                debug["http_status"] = str(response.status_code)
-                debug["raw_body"] = response.text[:2000]
-                if response.status_code != 200:
-                    debug["response"] = f"ERROR HTTP {response.status_code}: {response.text[:500]}"
+                    )
+                    debug["http_status"] = str(response.status_code)
+                    debug["raw_body"] = response.text[:2000]
+                    if response.status_code != 200:
+                        debug["response"] = f"ERROR HTTP {response.status_code}: {response.text[:500]}"
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(1)
+                            continue
+                        return "other", debug
+                    data = response.json()
+                    choice = data.get("choices", [{}])[0]
+                    finish_reason = choice.get("finish_reason", "")
+                    message = choice.get("message", {})
+                    content = message.get("content") or ""
+                    debug["content"] = repr(content)
+                    debug["finish_reason"] = finish_reason
+
+                    if not content or finish_reason == "length":
+                        logger.warning(f"Classification attempt {attempt + 1}: empty content or truncated (finish_reason={finish_reason})")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(1)
+                            continue
+                        return "other", debug
+
+                    try:
+                        parsed = json.loads(content)
+                        result = parsed.get("category", "other").lower().strip()
+                    except (json.JSONDecodeError, AttributeError):
+                        result = content.strip().lower().strip('"').strip("'").strip()
+
+                    valid_keys_set = {ct["key"] for ct in call_types}
+                    if result in valid_keys_set:
+                        debug["result"] = result
+                        debug["attempt"] = attempt + 1
+                        return result, debug
+                    for key in valid_keys_set:
+                        if key in result:
+                            debug["result"] = key
+                            debug["attempt"] = attempt + 1
+                            return key, debug
+
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1)
+                        continue
+                    debug["result"] = "other"
                     return "other", debug
-                data = response.json()
-                message = data.get("choices", [{}])[0].get("message", {})
-                content = message.get("content") or ""
-                debug["content"] = repr(content)
-
-                try:
-                    parsed = json.loads(content)
-                    result = parsed.get("category", "other").lower().strip()
-                except (json.JSONDecodeError, AttributeError):
-                    result = content.strip().lower().strip('"').strip("'").strip()
-
-                valid_keys_set = {ct["key"] for ct in call_types}
-                if result in valid_keys_set:
-                    debug["result"] = result
-                    return result, debug
-                for key in valid_keys_set:
-                    if key in result:
-                        debug["result"] = key
-                        return key, debug
-                debug["result"] = "other"
+            except Exception as e:
+                logger.warning(f"Classification attempt {attempt + 1} failed: {e}")
+                debug["response"] = str(e)
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
+                    continue
                 return "other", debug
-        except Exception as e:
-            logger.warning(f"Call classification failed: {e}, defaulting to 'other'")
-            debug["response"] = str(e)
-            return "other", debug
+        return "other", debug
 
     async def analyze_call(
         self,
