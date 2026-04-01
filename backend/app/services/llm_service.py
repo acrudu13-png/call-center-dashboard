@@ -35,7 +35,7 @@ REGULI STRICTE:
 Răspunde DOAR cu JSON valid."""
 
 
-def _build_schema_for_rules(rules: list[dict]) -> dict:
+def _build_schema_for_rules(rules: list[dict], speaker_ids: list[str] | None = None) -> dict:
     """Build a JSON schema with a fixed-length results array matching the exact rules."""
     total_possible = sum(r["max_score"] for r in rules)
 
@@ -84,7 +84,13 @@ def _build_schema_for_rules(rules: list[dict]) -> dict:
                 "criticalFailureReason": {"type": ["string", "null"]},
                 "isEligible": {"type": "boolean", "description": "false if voicemail, too short, no real conversation, or client hung up before talking"},
                 "ineligibleReason": {"type": ["string", "null"], "description": "Reason in Romanian why the call is not eligible for QA evaluation, or null if eligible"},
-                "speakerMap": {"type": "object", "description": "Map speaker IDs to names. E.g. {\"speaker_0\": \"Andra Gabor\", \"speaker_1\": \"Client\"}. Use agent name provided and 'Client' or customer name if identified.", "additionalProperties": {"type": "string"}},
+                "speakerMap": {
+                    "type": "object",
+                    "description": f"Map EXACT speaker IDs from the transcript to names. Keys MUST be from: {speaker_ids or ['speaker_0', 'speaker_1']}. Use agent name provided and 'Client' or customer name if identified.",
+                    "properties": {sid: {"type": "string"} for sid in (speaker_ids or ["speaker_0", "speaker_1"])},
+                    "required": speaker_ids or ["speaker_0", "speaker_1"],
+                    "additionalProperties": False,
+                },
             },
             "required": [
                 "summary", "improvementAdvice", "grade", "overallScore",
@@ -280,8 +286,11 @@ class LLMService:
             "max_tokens": self.settings.maxTokens,
         }
 
+        # Extract unique speaker IDs from transcript to constrain the schema
+        speaker_ids = sorted(set(seg["speaker"] for seg in transcript if seg.get("speaker")))
+
         # Build dynamic schema matching the exact rules
-        dynamic_schema = _build_schema_for_rules(rules)
+        dynamic_schema = _build_schema_for_rules(rules, speaker_ids=speaker_ids or None)
 
         # Log the full prompt being sent
         user_msg = messages[1]["content"]
