@@ -844,7 +844,7 @@ function TestModePanel({ callId }: { callId: string }) {
             <Label className="text-xs font-medium">Temperature: {temperature}</Label>
             <Slider
               value={[temperature]}
-              onValueChange={([v]) => setTemperature(v)}
+              onValueChange={(v) => setTemperature(Array.isArray(v) ? v[0] : v)}
               min={0}
               max={2}
               step={0.05}

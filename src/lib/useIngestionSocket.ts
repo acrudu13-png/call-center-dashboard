@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import type { IngestionRun, LogEntry, Job } from "@/lib/api";
 import { WS_URL } from "@/lib/config";
 const RECONNECT_DELAY = 2000;
