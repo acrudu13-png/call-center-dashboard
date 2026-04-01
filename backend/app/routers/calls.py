@@ -89,18 +89,21 @@ def list_calls(
         query = query.filter(Call.direction == direction)
     if callType:
         query = query.filter(Call.call_type == callType)
-    if dateFrom:
+    if dateFrom or dateTo:
         from datetime import datetime, timedelta, timezone
         try:
-            dt = datetime.strptime(dateFrom, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-            query = query.filter(Call.date_time >= dt)
-        except ValueError:
-            pass
-    if dateTo:
-        from datetime import datetime, timedelta, timezone
-        try:
-            dt = datetime.strptime(dateTo, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
-            query = query.filter(Call.date_time < dt)
+            if dateFrom and dateTo:
+                dt_from = datetime.strptime(dateFrom, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                dt_to = datetime.strptime(dateTo, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+                query = query.filter(Call.date_time >= dt_from, Call.date_time < dt_to)
+            elif dateFrom:
+                # Single date — show only that day
+                dt_from = datetime.strptime(dateFrom, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                query = query.filter(Call.date_time >= dt_from, Call.date_time < dt_from + timedelta(days=1))
+            elif dateTo:
+                # Single date — show only that day
+                dt_to = datetime.strptime(dateTo, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                query = query.filter(Call.date_time >= dt_to, Call.date_time < dt_to + timedelta(days=1))
         except ValueError:
             pass
     if search:
