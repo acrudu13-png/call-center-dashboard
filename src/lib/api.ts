@@ -109,6 +109,7 @@ export async function fetchCalls(params: {
   maxScore?: number;
   runId?: string;
   direction?: string;
+  callType?: string;
 } = {}): Promise<CallListResponse> {
   const sp = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
@@ -325,6 +326,7 @@ export async function bulkReanalyze(params: {
   maxScore?: number;
   runId?: string;
   direction?: string;
+  callType?: string;
 } = {}): Promise<{ message: string; total: number }> {
   const sp = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {

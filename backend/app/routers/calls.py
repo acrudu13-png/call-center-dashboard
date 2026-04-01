@@ -69,6 +69,7 @@ def list_calls(
     maxScore: Optional[float] = None,
     runId: Optional[str] = None,
     direction: Optional[str] = None,
+    callType: Optional[str] = None,
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -84,6 +85,8 @@ def list_calls(
         query = query.filter(Call.ingestion_run_id == runId)
     if direction:
         query = query.filter(Call.direction == direction)
+    if callType:
+        query = query.filter(Call.call_type == callType)
     if search:
         pattern = f"%{search}%"
         query = query.filter(

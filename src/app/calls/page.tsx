@@ -65,6 +65,7 @@ export default function CallsExplorerPage() {
   const [agentFilter, setAgentFilter] = useState("all");
   const [agents, setAgents] = useState<{ agentId: string; agentName: string; callCount: number }[]>([]);
   const [directionFilter, setDirectionFilter] = useState("all");
+  const [callTypeFilter, setCallTypeFilter] = useState("all");
   const [runFilter, setRunFilter] = useState("all");
   const [ingestionRuns, setIngestionRuns] = useState<IngestionRunListItem[]>([]);
   const [dateFrom, setDateFrom] = useState("");
@@ -119,6 +120,7 @@ export default function CallsExplorerPage() {
         runId: runFilter !== "all" ? runFilter : undefined,
         agentId: agentFilter !== "all" ? agentFilter : undefined,
         direction: directionFilter !== "all" ? directionFilter : undefined,
+        callType: callTypeFilter !== "all" ? callTypeFilter : undefined,
       });
       setCalls(res.calls);
       setTotal(res.total);
@@ -128,7 +130,7 @@ export default function CallsExplorerPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, sortKey, sortDir, statusFilter, minScore, maxScore, runFilter, agentFilter, directionFilter]);
+  }, [page, pageSize, search, sortKey, sortDir, statusFilter, minScore, maxScore, runFilter, agentFilter, directionFilter, callTypeFilter]);
 
   useEffect(() => {
     loadCalls();
@@ -144,7 +146,7 @@ export default function CallsExplorerPage() {
   // Reset page on filter change
   useEffect(() => {
     setPage(1);
-  }, [search, minScore, maxScore, statusFilter, ruleFilter, runFilter, agentFilter, directionFilter, dateFrom, dateTo, sortKey, sortDir]);
+  }, [search, minScore, maxScore, statusFilter, ruleFilter, runFilter, agentFilter, directionFilter, callTypeFilter, dateFrom, dateTo, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -177,17 +179,18 @@ export default function CallsExplorerPage() {
     setRuleFilter("all");
     setAgentFilter("all");
     setDirectionFilter("all");
+    setCallTypeFilter("all");
     setRunFilter("all");
     setDateFrom("");
     setDateTo("");
   };
 
-  const hasActiveFilters = minScore || maxScore || statusFilter !== "all" || ruleFilter !== "all" || agentFilter !== "all" || directionFilter !== "all" || runFilter !== "all" || dateFrom || dateTo;
+  const hasActiveFilters = minScore || maxScore || statusFilter !== "all" || ruleFilter !== "all" || agentFilter !== "all" || directionFilter !== "all" || callTypeFilter !== "all" || runFilter !== "all" || dateFrom || dateTo;
 
   const handleBulkReanalyze = async () => {
     const msg = hasActiveFilters
-      ? `Reanaliza ${total} apeluri filtrate?`
-      : `Reanaliza TOATE cele ${total} apeluri?`;
+      ? `${t.callDetail.reanalyzeFiltered} (${total})?`
+      : `${t.callDetail.reanalyzeAll} (${total})?`;
     if (!confirm(msg)) return;
     setBulkAnalyzing(true);
     try {
@@ -200,6 +203,7 @@ export default function CallsExplorerPage() {
         maxScore: maxScore ? Number(maxScore) : undefined,
         runId: runFilter !== "all" ? runFilter : undefined,
         direction: directionFilter !== "all" ? directionFilter : undefined,
+        callType: callTypeFilter !== "all" ? callTypeFilter : undefined,
       });
       loadCalls(); // refresh to show "reanalyzing" status
     } catch (e) {
@@ -272,10 +276,10 @@ export default function CallsExplorerPage() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t.common.allStatuses}</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="flagged">Flagged</SelectItem>
-                      <SelectItem value="in_review">In Review</SelectItem>
-                      <SelectItem value="processing">Processing</SelectItem>
+                      <SelectItem value="completed">{t.common.completed}</SelectItem>
+                      <SelectItem value="flagged">{t.common.flagged}</SelectItem>
+                      <SelectItem value="in_review">{t.common.inReview}</SelectItem>
+                      <SelectItem value="processing">{t.common.processing}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -294,13 +298,27 @@ export default function CallsExplorerPage() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Direction</Label>
+                  <Label>{t.calls.direction}</Label>
                   <Select value={directionFilter} onValueChange={(v) => v && setDirectionFilter(v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="inbound">Inbound</SelectItem>
-                      <SelectItem value="outbound">Outbound</SelectItem>
+                      <SelectItem value="all">{t.common.allDirections}</SelectItem>
+                      <SelectItem value="inbound">{t.common.inbound}</SelectItem>
+                      <SelectItem value="outbound">{t.common.outbound}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t.calls.callType}</Label>
+                  <Select value={callTypeFilter} onValueChange={(v) => v && setCallTypeFilter(v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t.common.allCallTypes}</SelectItem>
+                      {callTypesList.map((ct) => (
+                        <SelectItem key={ct.key} value={ct.key}>
+                          {ct.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -315,12 +333,12 @@ export default function CallsExplorerPage() {
                 <div className="space-y-1.5">
                   <Label>{t.calls.failedRule}</Label>
                   <Select value={ruleFilter} onValueChange={(v) => v && setRuleFilter(v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectTrigger className="truncate"><SelectValue /></SelectTrigger>
+                    <SelectContent className="max-w-[350px]">
                       <SelectItem value="all">{t.common.allRules}</SelectItem>
                       {rules.map((rule) => (
-                        <SelectItem key={rule.rule_id} value={rule.rule_id}>
-                          {rule.title}
+                        <SelectItem key={rule.rule_id} value={rule.rule_id} title={rule.title}>
+                          <span className="truncate block max-w-[300px]">{rule.title}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>

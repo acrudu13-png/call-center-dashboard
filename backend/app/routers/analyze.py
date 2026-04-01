@@ -175,6 +175,7 @@ async def bulk_reanalyze(
     maxScore: Optional[float] = None,
     runId: Optional[str] = None,
     direction: Optional[str] = None,
+    callType: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """Queue bulk reanalysis for all matching calls. Runs in background."""
@@ -187,6 +188,8 @@ async def bulk_reanalyze(
         query = query.filter(Call.agent_id == agentId)
     if direction:
         query = query.filter(Call.direction == direction)
+    if callType:
+        query = query.filter(Call.call_type == callType)
     if runId:
         query = query.filter(Call.ingestion_run_id == runId)
     if search:
