@@ -880,11 +880,6 @@ function TestModePanel({ callId }: { callId: string }) {
               placeholder="Token budget"
             />
           </div>
-          <div className="space-y-1 text-xs text-muted-foreground pt-1">
-            <p>Temp 0 = deterministic</p>
-            <p>Temp 1+ = creative</p>
-            <p>Thinking = deeper reasoning</p>
-          </div>
         </div>
 
         {/* Run button */}
