@@ -242,14 +242,20 @@ export default function LogsPage() {
     return { completedJobs, failedJobs, queuedJobs };
   }, [allJobs]);
 
+  const fixTz = (isoString: string) => {
+    // Backend labels naive UTC datetimes with +03:00 offset incorrectly.
+    // Strip the offset and treat as UTC so the frontend can convert properly.
+    return isoString.replace(/[+-]\d{2}:\d{2}$/, "") + "Z";
+  };
+
   const formatTime = (isoString: string) =>
-    new Date(isoString).toLocaleTimeString("ro-RO", { timeZone: "Europe/Bucharest", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    new Date(fixTz(isoString)).toLocaleTimeString("ro-RO", { timeZone: "Europe/Bucharest", hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
   const formatDate = (isoString: string) =>
-    new Date(isoString).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    new Date(fixTz(isoString)).toLocaleString("ro-RO", { timeZone: "Europe/Bucharest", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
   const getRelativeTime = (isoString: string) => {
-    const diff = Date.now() - new Date(isoString).getTime();
+    const diff = Date.now() - new Date(fixTz(isoString)).getTime();
     const minutes = Math.floor(diff / 60000);
     if (minutes < 1) return "just now";
     if (minutes < 60) return `${minutes}m ago`;
@@ -476,7 +482,7 @@ export default function LogsPage() {
                   const duration = liveRun.startedAt
                     ? liveRun.completedAt
                       ? Math.round((new Date(liveRun.completedAt).getTime() - new Date(liveRun.startedAt).getTime()) / 1000)
-                      : Math.round((Date.now() - new Date(liveRun.startedAt).getTime()) / 1000)
+                      : Math.round((Date.now() - new Date(fixTz(liveRun.startedAt)).getTime()) / 1000)
                     : 0;
                   const durationStr = duration > 3600
                     ? `${Math.floor(duration / 3600)}h ${Math.floor((duration % 3600) / 60)}m`

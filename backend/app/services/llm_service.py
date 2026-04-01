@@ -152,21 +152,38 @@ class LLMService:
                     json={
                         "model": "openai/gpt-5-nano",
                         "messages": messages,
-                        "temperature": 0,
-                        "max_tokens": 50,
+                        "temperature": 1,
+                        "max_completion_tokens": 500,
+                        "reasoning": {"effort": "low"},
                     },
                 )
                 debug["http_status"] = str(response.status_code)
-                debug["raw_body"] = response.text[:1000]
+                debug["raw_body"] = response.text[:2000]
                 if response.status_code != 200:
                     debug["response"] = f"ERROR HTTP {response.status_code}: {response.text[:500]}"
                     return "other", debug
                 data = response.json()
-                content = data.get("choices", [{}])[0].get("message", {}).get("content")
-                debug["response"] = f"content={repr(content)}"
-                if not content:
+                message = data.get("choices", [{}])[0].get("message", {})
+                content = message.get("content")
+                reasoning = message.get("reasoning") or ""
+                debug["content"] = repr(content)
+                debug["reasoning"] = reasoning[:500]
+
+                # Extract answer: prefer content, fall back to reasoning
+                if content:
+                    raw_result = content.strip()
+                elif reasoning:
+                    # Search for a valid key in the reasoning text
+                    valid_keys = {ct["key"] for ct in call_types}
+                    reasoning_lower = reasoning.lower()
+                    for key in valid_keys:
+                        if key in reasoning_lower:
+                            raw_result = key
+                            break
+                    else:
+                        raw_result = "other"
+                else:
                     return "other", debug
-                raw_result = content.strip()
 
                 result = raw_result.lower().strip('"').strip("'").strip()
                 valid_keys = {ct["key"] for ct in call_types}
