@@ -58,7 +58,8 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     call_label = call.call_id if call else payload.callId
 
     # Prevent concurrent reanalysis of the same call (skip check for dry runs)
-    if not payload.dryRun and call and call.status in ("reanalyzing", "processing"):
+    # Allow retrying "reanalyzing" calls that may be stuck from a previous failed attempt
+    if not payload.dryRun and call and call.status == "processing":
         raise HTTPException(status_code=409, detail=f"Call {call_label} is already being analyzed")
 
     # Mark as reanalyzing (only for real runs)
@@ -141,6 +142,10 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
             thinking_budget=payload.thinkingBudget,
         )
     except Exception as e:
+        # Reset status so the call can be reanalyzed again
+        if call and not payload.dryRun:
+            call.status = "failed"
+            db.commit()
         _add_log(db, "error", f"Reanalysis failed for {call_label}: {e}")
         await manager.broadcast("log", {
             "timestamp": utcnow().isoformat(), "level": "error",
