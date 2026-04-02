@@ -276,6 +276,178 @@ async def stop_bulk_reanalyze(db: Session = Depends(get_db)):
     return {"message": f"Stopped. Reset {len(stuck)} calls.", "reset": len(stuck)}
 
 
+@router.post("/bulk/reclassify")
+async def bulk_reclassify(
+    status: Optional[str] = None,
+    agentId: Optional[str] = None,
+    search: Optional[str] = None,
+    minScore: Optional[float] = None,
+    maxScore: Optional[float] = None,
+    runId: Optional[str] = None,
+    direction: Optional[str] = None,
+    callType: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Bulk reclassify call types only (no QA rules analysis)."""
+    query = db.query(Call).filter(Call.status.notin_(["processing", "reanalyzing"]))
+
+    if status:
+        query = query.filter(Call.status == status)
+    if agentId:
+        query = query.filter(Call.agent_id == agentId)
+    if direction:
+        query = query.filter(Call.direction == direction)
+    if callType:
+        query = query.filter(Call.call_type == callType)
+    if runId:
+        query = query.filter(Call.ingestion_run_id == runId)
+    if search:
+        pattern = f"%{search}%"
+        query = query.filter(
+            (Call.call_id.ilike(pattern))
+            | (Call.agent_name.ilike(pattern))
+            | (Call.customer_phone.ilike(pattern))
+        )
+    if minScore is not None:
+        query = query.filter(Call.qa_score >= minScore)
+    if maxScore is not None:
+        query = query.filter(Call.qa_score <= maxScore)
+
+    calls_list = query.all()
+    call_ids = [c.id for c in calls_list]
+    total = len(call_ids)
+
+    if total == 0:
+        return {"message": "No calls match the filters", "total": 0}
+
+    # Mark all calls as "reclassifying" so the UI can show progress
+    for c in calls_list:
+        c.status = "reanalyzing"
+    db.commit()
+
+    _add_log(db, "info", f"Bulk reclassification started for {total} calls")
+    await manager.broadcast("log", {
+        "timestamp": utcnow().isoformat(), "level": "info",
+        "source": "analysis", "message": f"Bulk reclassification started for {total} calls",
+    })
+    await manager.broadcast("bulk_reanalyze_started", {"callIds": call_ids, "total": total})
+
+    _bulk_stop_event.clear()
+    asyncio.create_task(_bulk_reclassify_bg(call_ids))
+
+    return {"message": f"Bulk reclassification queued for {total} calls", "total": total}
+
+
+async def _bulk_reclassify_bg(call_ids: list[str]):
+    """Background task to reclassify call types only (no rules analysis)."""
+    import asyncio
+    from app.database import SessionLocal
+    from app.services.settings_service import get_setting
+    from app.schemas.setting import LlmSettings, ClassificationSettings as ClsSettings
+    from app.models.call_type import CallType as CallTypeModel
+    from sqlalchemy.orm.attributes import flag_modified
+
+    semaphore = asyncio.Semaphore(10)
+    completed_count = 0
+    lock = asyncio.Lock()
+
+    async def _reclassify_one(call_id: str):
+        nonlocal completed_count
+        if _bulk_stop_event.is_set():
+            return
+        async with semaphore:
+            if _bulk_stop_event.is_set():
+                return
+            db = SessionLocal()
+            try:
+                call = db.query(Call).filter(Call.id == call_id).first()
+                if not call or call.status != "reanalyzing":
+                    return
+
+                llm_settings = get_setting(db, "llm", LlmSettings)
+                if not llm_settings.openRouterApiKey:
+                    return
+
+                transcript = [
+                    {"speaker": t.speaker, "timestamp": t.timestamp, "text": t.text}
+                    for t in call.transcript_lines
+                ]
+                if not transcript:
+                    # No transcript — just restore status
+                    call.status = "completed"
+                    db.commit()
+                    return
+
+                active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).order_by(CallTypeModel.sort_order).all()
+                types_data = [{"key": ct.key, "name": ct.name, "description": ct.description} for ct in active_types]
+
+                if not types_data:
+                    call.call_type = None
+                    call.status = "flagged" if call.has_critical_failure else "completed"
+                    db.commit()
+                    return
+
+                llm = LLMService(llm_settings)
+                cls_s = get_setting(db, "classification", ClsSettings)
+                call_type_key, cls_debug = await llm.classify_call(
+                    transcript, types_data,
+                    agent_name=call.agent_name,
+                    classification_settings=cls_s,
+                )
+
+                call.call_type = call_type_key
+                rj = dict(call.raw_json or {})
+                rj["classification_debug"] = cls_debug
+                call.raw_json = rj
+                flag_modified(call, "raw_json")
+                # Restore the previous status (not reanalyzing)
+                call.status = "flagged" if call.has_critical_failure else "completed"
+                db.commit()
+
+                async with lock:
+                    completed_count += 1
+                    idx = completed_count
+
+                await manager.broadcast("call_updated", {
+                    "callId": call.id,
+                    "status": call.status,
+                    "qaScore": call.qa_score,
+                    "callType": call.call_type,
+                    "index": idx,
+                    "total": len(call_ids),
+                })
+
+            except Exception as e:
+                logger.error(f"Bulk reclassification failed for {call_id}: {e}")
+                db2 = SessionLocal()
+                try:
+                    failed_call = db2.query(Call).filter(Call.id == call_id).first()
+                    if failed_call and failed_call.status == "reanalyzing":
+                        failed_call.status = "flagged" if failed_call.has_critical_failure else "completed"
+                        db2.commit()
+                finally:
+                    db2.close()
+
+                async with lock:
+                    completed_count += 1
+                    idx = completed_count
+
+                await manager.broadcast("call_updated", {
+                    "callId": call_id, "status": "completed",
+                    "index": idx, "total": len(call_ids),
+                })
+            finally:
+                db.close()
+
+    await asyncio.gather(*[_reclassify_one(cid) for cid in call_ids])
+
+    await manager.broadcast("log", {
+        "timestamp": utcnow().isoformat(), "level": "info",
+        "source": "analysis", "message": f"Bulk reclassification complete: {len(call_ids)} calls",
+    })
+    await manager.broadcast("bulk_reanalyze_done", {"total": len(call_ids)})
+
+
 async def _bulk_reanalyze_bg(call_ids: list[str]):
     """Background task to reanalyze calls in parallel."""
     import asyncio

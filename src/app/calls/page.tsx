@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -41,8 +42,8 @@ import {
   PhoneIncoming,
   PhoneOutgoing,
 } from "lucide-react";
-import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, fetchCallTypes, bulkReanalyze, stopBulkReanalyze, type CallSummary, type QARule, type IngestionRunListItem, type CallTypeInfo } from "@/lib/api";
-import { RotateCcw, Square } from "lucide-react";
+import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, fetchCallTypes, bulkReanalyze, bulkReclassify, stopBulkReanalyze, type CallSummary, type QARule, type IngestionRunListItem, type CallTypeInfo } from "@/lib/api";
+import { RotateCcw, Square, Tag } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useIngestionSocket } from "@/lib/useIngestionSocket";
 
@@ -56,6 +57,8 @@ type SortKey = "date_time" | "agent_name" | "duration" | "qa_score";
 type SortDir = "asc" | "desc";
 
 export default function CallsExplorerPage() {
+  const searchParams = useSearchParams();
+  const testMode = searchParams.get("test-mode") === "true";
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [minScore, setMinScore] = useState("");
@@ -210,6 +213,31 @@ export default function CallsExplorerPage() {
       loadCalls(); // refresh to show "reanalyzing" status
     } catch (e) {
       console.error("Bulk reanalyze failed:", e);
+      setBulkAnalyzing(false);
+    }
+  };
+
+  const handleBulkReclassify = async () => {
+    const msg = hasActiveFilters
+      ? `${t.callDetail.reclassifyFiltered} (${total})?`
+      : `${t.callDetail.reclassifyAll} (${total})?`;
+    if (!confirm(msg)) return;
+    setBulkAnalyzing(true);
+    try {
+      const statusMap: Record<string, string> = { Passed: "completed", Failed: "flagged" };
+      await bulkReclassify({
+        status: statusFilter !== "all" ? statusMap[statusFilter] || statusFilter : undefined,
+        agentId: agentFilter !== "all" ? agentFilter : undefined,
+        search: search || undefined,
+        minScore: minScore ? Number(minScore) : undefined,
+        maxScore: maxScore ? Number(maxScore) : undefined,
+        runId: runFilter !== "all" ? runFilter : undefined,
+        direction: directionFilter !== "all" ? directionFilter : undefined,
+        callType: callTypeFilter !== "all" ? callTypeFilter : undefined,
+      });
+      loadCalls();
+    } catch (e) {
+      console.error("Bulk reclassify failed:", e);
       setBulkAnalyzing(false);
     }
   };
@@ -510,8 +538,8 @@ export default function CallsExplorerPage() {
         </CardContent>
       </Card>
 
-      {/* Bulk reanalyze */}
-      {total > 0 && (
+      {/* Bulk reanalyze / reclassify — only visible with ?test-mode=true */}
+      {total > 0 && testMode && (
         <div className="flex justify-end gap-2 pt-2">
           {bulkAnalyzing && (
             <Button variant="destructive" size="sm" onClick={handleStopBulkReanalyze}>
@@ -519,6 +547,10 @@ export default function CallsExplorerPage() {
               {t.common.stop}
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={handleBulkReclassify} disabled={bulkAnalyzing}>
+            {bulkAnalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Tag className="h-3.5 w-3.5 mr-1.5" />}
+            {hasActiveFilters ? `${t.callDetail.reclassifyFiltered} (${total})` : `${t.callDetail.reclassifyAll} (${total})`}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleBulkReanalyze} disabled={bulkAnalyzing}>
             {bulkAnalyzing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
             {bulkAnalyzing && lastCallUpdate ? `${t.callDetail.analyzing} (${lastCallUpdate.index}/${lastCallUpdate.total})` : bulkAnalyzing ? t.callDetail.analyzing : hasActiveFilters ? `${t.callDetail.reanalyzeFiltered} (${total})` : `${t.callDetail.reanalyzeAll} (${total})`}

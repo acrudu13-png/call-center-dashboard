@@ -134,9 +134,10 @@ function UserGuide() {
         </div>
         <H3>Reanaliza in masa:</H3>
         <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
-          <li><strong>Reanalizeaza tot:</strong> Butonul retrimite toate apelurile din filtrele curente la AI pentru reevaluare cu regulile actuale.</li>
-          <li><strong>Progres live:</strong> In timpul reanalizei, un indicator arata progresul (ex: 15/120 apeluri procesate).</li>
-          <li><strong>Oprire:</strong> Butonul rosu opreste reanalizarea in curs fara a afecta apelurile deja procesate.</li>
+          <li><strong>Reclasifica tipuri:</strong> Butonul retrimite toate apelurile din filtrele curente la AI doar pentru reclasificarea tipului de apel, fara a rula regulile QA. Util dupa modificarea tipurilor sau a promptului de clasificare.</li>
+          <li><strong>Reanalizeaza tot:</strong> Butonul retrimite toate apelurile din filtrele curente la AI pentru reevaluare completa (clasificare + reguli QA).</li>
+          <li><strong>Progres live:</strong> In timpul reanalizei/reclasificarii, un indicator arata progresul (ex: 15/120 apeluri procesate).</li>
+          <li><strong>Oprire:</strong> Butonul rosu opreste operatiunea in curs fara a afecta apelurile deja procesate.</li>
         </ul>
         <P>Apelurile neeligibile (mesagerie vocala, prea scurte) sunt marcate cu <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300">N/A</Badge> si nu afecteaza statisticile.</P>
         <P>Numarul de randuri per pagina poate fi ajustat: 10, 25, 50 sau 100.</P>
@@ -478,9 +479,10 @@ function UserGuideEn() {
         </div>
         <H3>Bulk reanalysis:</H3>
         <ul className="space-y-1.5 text-sm text-muted-foreground list-disc list-inside">
-          <li><strong>Reanalyze all:</strong> Resends all calls matching current filters to AI for re-evaluation with current rules.</li>
-          <li><strong>Live progress:</strong> During reanalysis, a counter shows progress (e.g. 15/120 calls processed).</li>
-          <li><strong>Stop:</strong> The red stop button halts the reanalysis without affecting already processed calls.</li>
+          <li><strong>Reclassify types:</strong> Resends all calls matching current filters to AI for call type reclassification only, without running QA rules. Useful after modifying call types or the classification prompt.</li>
+          <li><strong>Reanalyze all:</strong> Resends all calls matching current filters to AI for full re-evaluation (classification + QA rules).</li>
+          <li><strong>Live progress:</strong> During reanalysis/reclassification, a counter shows progress (e.g. 15/120 calls processed).</li>
+          <li><strong>Stop:</strong> The red stop button halts the operation without affecting already processed calls.</li>
         </ul>
         <P>Ineligible calls (voicemail, too short) are marked with <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300">N/A</Badge> and do not affect statistics.</P>
         <P>Rows per page can be adjusted: 10, 25, 50, or 100.</P>

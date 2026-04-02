@@ -373,6 +373,23 @@ export async function stopBulkReanalyze(): Promise<{ message: string; reset: num
   return apiFetch(`/api/analyze/bulk/stop`, { method: "POST" });
 }
 
+export async function bulkReclassify(params: {
+  status?: string;
+  agentId?: string;
+  search?: string;
+  minScore?: number;
+  maxScore?: number;
+  runId?: string;
+  direction?: string;
+  callType?: string;
+} = {}): Promise<{ message: string; total: number }> {
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") sp.set(k, String(v));
+  });
+  return apiFetch(`/api/analyze/bulk/reclassify?${sp.toString()}`, { method: "POST" });
+}
+
 // ── Ingestion ─────────────────────────────────────────────
 
 export async function triggerIngestion(source: string = "sftp", remotePath?: string) {
