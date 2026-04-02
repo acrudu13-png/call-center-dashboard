@@ -9,7 +9,7 @@ from app.models.call import Call, TranscriptLine, ScorecardEntry
 from app.models.job import LogEntry
 from app.models.rule import QARule
 from app.schemas.call import AnalyzeRequest, AnalyzeResponse
-from app.schemas.setting import LlmSettings, MainPrompt
+from app.schemas.setting import LlmSettings, MainPrompt, ClassificationSettings
 from app.services.llm_service import LLMService
 from app.services.settings_service import get_setting as _get_setting
 from app.auth import get_current_user, require_role, require_page
@@ -99,7 +99,8 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).order_by(CallTypeModel.sort_order).all()
     types_data = [{"key": ct.key, "name": ct.name, "description": ct.description} for ct in active_types]
     if types_data and call:
-        call_type_key, cls_debug = await llm.classify_call(transcript, types_data, agent_name=call.agent_name)
+        cls_settings = _get_setting(db, "classification", ClassificationSettings)
+        call_type_key, cls_debug = await llm.classify_call(transcript, types_data, agent_name=call.agent_name, classification_settings=cls_settings)
         call.call_type = call_type_key
         from sqlalchemy.orm.attributes import flag_modified
         rj = dict(call.raw_json or {})
@@ -280,7 +281,7 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
     import asyncio
     from app.database import SessionLocal
     from app.services.settings_service import get_setting
-    from app.schemas.setting import LlmSettings, MainPrompt, IngestSchedule
+    from app.schemas.setting import LlmSettings, MainPrompt, IngestSchedule, ClassificationSettings as ClsSettings
     from app.models.call_type import CallType as CallTypeModel
     from sqlalchemy.orm.attributes import flag_modified
 
@@ -332,7 +333,8 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
                 llm = LLMService(llm_settings)
 
                 if types_data:
-                    call_type_key, cls_debug = await llm.classify_call(transcript, types_data, agent_name=call.agent_name)
+                    cls_s = get_setting(db, "classification", ClsSettings)
+                    call_type_key, cls_debug = await llm.classify_call(transcript, types_data, agent_name=call.agent_name, classification_settings=cls_s)
                     call.call_type = call_type_key
                     rj = dict(call.raw_json or {})
                     rj["classification_debug"] = cls_debug

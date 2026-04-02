@@ -76,6 +76,12 @@ class CustomVocabulary(BaseModel):
     words: list[str] = []
 
 
+class ClassificationSettings(BaseModel):
+    model: str = "openai/gpt-5-nano"
+    prompt: str = "You classify phone calls into categories. Reply with ONLY the category key, nothing else. No explanation."
+    temperature: float = 0.0
+
+
 class ConnectionTestResult(BaseModel):
     success: bool
     message: str

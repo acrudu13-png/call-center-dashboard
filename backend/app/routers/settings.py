@@ -5,7 +5,8 @@ from app.database import get_db
 from app.schemas.setting import (
     SftpSettings, S3Settings, LlmSettings, SonioxSettings,
     WebhookSettings, IngestSchedule, MetadataMapping,
-    MainPrompt, CallContext, CustomVocabulary, ConnectionTestResult,
+    MainPrompt, CallContext, CustomVocabulary, ClassificationSettings,
+    ConnectionTestResult,
 )
 from app.services.sftp_service import SFTPService
 from app.services.s3_service import S3Service
@@ -13,7 +14,7 @@ from app.services.webhook_service import WebhookService
 from app.services.settings_service import get_setting as _get_setting, save_setting as _save_setting
 from app.auth import get_current_user, require_role, require_page
 
-router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_page("ingestion", "ai", "webhooks"))])
+router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_page("ingestion", "ai", "webhooks", "rules"))])
 
 
 # --- SFTP ---
@@ -145,3 +146,14 @@ def get_custom_vocabulary(db: Session = Depends(get_db)):
 @router.put("/custom-vocabulary", response_model=CustomVocabulary)
 def save_custom_vocabulary(payload: CustomVocabulary, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
     return _save_setting(db, "custom-vocabulary", payload)
+
+
+# --- Classification Settings ---
+@router.get("/classification", response_model=ClassificationSettings)
+def get_classification(db: Session = Depends(get_db)):
+    return _get_setting(db, "classification", ClassificationSettings)
+
+
+@router.put("/classification", response_model=ClassificationSettings)
+def save_classification(payload: ClassificationSettings, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
+    return _save_setting(db, "classification", payload)

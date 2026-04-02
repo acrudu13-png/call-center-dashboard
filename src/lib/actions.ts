@@ -10,6 +10,9 @@ import {
   deleteRule as apiDeleteRule,
   reorderRules,
   triggerIngestion,
+  createCallType as apiCreateCallType,
+  updateCallType as apiUpdateCallType,
+  deleteCallType as apiDeleteCallType,
 } from "./api";
 
 export async function saveSftpSettings(data: {
@@ -169,6 +172,36 @@ export async function saveIngestSchedule(data: {
     success: true,
     message: `Schedule saved — will run daily at ${String(data.cronHour).padStart(2, "0")}:00.`,
   };
+}
+
+export async function saveClassificationSettings(data: {
+  model: string;
+  prompt: string;
+  temperature: number;
+}) {
+  await saveSetting("classification", data);
+  return { success: true, message: "Classification settings saved successfully." };
+}
+
+export async function saveCallType(data: {
+  key: string;
+  name: string;
+  description?: string;
+  enabled?: boolean;
+  isNew?: boolean;
+}) {
+  const { isNew, ...rest } = data;
+  if (isNew) {
+    await apiCreateCallType(rest);
+  } else {
+    await apiUpdateCallType(data.key, { name: data.name, description: data.description, enabled: data.enabled });
+  }
+  return { success: true, message: "Call type saved successfully." };
+}
+
+export async function removeCallType(key: string) {
+  await apiDeleteCallType(key);
+  return { success: true, message: "Call type deleted successfully." };
 }
 
 export async function triggerManualIngestionCheck(remotePath: string) {

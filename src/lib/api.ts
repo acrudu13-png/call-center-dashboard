@@ -474,6 +474,24 @@ export async function fetchCallTypes(): Promise<CallTypeInfo[]> {
   return apiFetch("/api/call-types");
 }
 
+export async function createCallType(data: { key: string; name: string; description?: string; enabled?: boolean }): Promise<CallTypeInfo> {
+  return apiFetch("/api/call-types", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateCallType(key: string, data: { name?: string; description?: string; enabled?: boolean }): Promise<CallTypeInfo> {
+  return apiFetch(`/api/call-types/${key}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteCallType(key: string): Promise<void> {
+  return apiFetch(`/api/call-types/${key}`, { method: "DELETE" });
+}
+
 // ── Users ─────────────────────────────────────────────────
 
 export interface UserInfo {

@@ -3,7 +3,7 @@ import json
 import logging
 from typing import Optional
 import httpx
-from app.schemas.setting import LlmSettings
+from app.schemas.setting import LlmSettings, ClassificationSettings
 from app.schemas.call import AnalyzeResponse, ScorecardEntrySchema
 
 logger = logging.getLogger(__name__)
@@ -115,9 +115,11 @@ class LLMService:
         transcript: list[dict],
         call_types: list[dict],
         agent_name: Optional[str] = None,
+        classification_settings: Optional[ClassificationSettings] = None,
     ) -> tuple[str, dict]:
         """Classify the call type. Returns (key, debug_info)."""
-        debug = {"model": "openai/gpt-5-nano", "request": "", "response": "", "result": "other"}
+        cls_settings = classification_settings or ClassificationSettings()
+        debug = {"model": cls_settings.model, "request": "", "response": "", "result": "other"}
 
         if not self.settings.openRouterApiKey or not call_types:
             return "other", debug
@@ -140,7 +142,7 @@ class LLMService:
         )
 
         messages = [
-            {"role": "system", "content": "You classify phone calls into categories. Reply with ONLY the category key, nothing else. No explanation."},
+            {"role": "system", "content": cls_settings.prompt},
             {"role": "user", "content": prompt},
         ]
 
@@ -177,9 +179,9 @@ class LLMService:
                         OPENROUTER_URL,
                         headers=headers,
                         json={
-                            "model": "openai/gpt-5-nano",
+                            "model": cls_settings.model,
                             "messages": messages,
-                            "temperature": 0,
+                            "temperature": cls_settings.temperature,
                             "max_completion_tokens": 2000,
                             "response_format": {
                                 "type": "json_schema",

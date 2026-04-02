@@ -24,6 +24,7 @@ from app.services.webhook_service import WebhookService
 from app.schemas.setting import (
     SftpSettings, S3Settings, SonioxSettings, LlmSettings, WebhookSettings,
     MetadataMapping, CallContext, CustomVocabulary, IngestSchedule,
+    ClassificationSettings,
 )
 from app.ws_manager import manager
 
@@ -674,7 +675,8 @@ class IngestionService:
 
             if types_data:
                 llm_cls = LLMService(settings.llm)
-                classified_type, cls_debug = await llm_cls.classify_call(segments, types_data, agent_name=call.agent_name)
+                cls_settings = _get_setting(db, "classification", ClassificationSettings)
+                classified_type, cls_debug = await llm_cls.classify_call(segments, types_data, agent_name=call.agent_name, classification_settings=cls_settings)
                 call.call_type = classified_type
                 from sqlalchemy.orm.attributes import flag_modified
                 rj = dict(call.raw_json or {})
