@@ -16,6 +16,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _sync_call_id_sequence():
+    """Create call_id_seq and sync it with the highest existing CALL-XXXX number."""
+    from sqlalchemy import text
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        db.execute(text("CREATE SEQUENCE IF NOT EXISTS call_id_seq"))
+        max_num = db.execute(text(
+            "SELECT COALESCE(MAX(CAST(REPLACE(call_id, 'CALL-', '') AS INTEGER)), 999) FROM calls"
+        )).scalar()
+        db.execute(text(f"SELECT setval('call_id_seq', {max_num})"))
+        db.commit()
+        logger.info(f"call_id_seq synced to {max_num}")
+    except Exception as e:
+        logger.warning(f"Failed to sync call_id_seq: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def _cleanup_orphaned_runs():
     """Mark any in-progress ingestion runs as stopped — they died with the previous process."""
     from app.database import SessionLocal, utcnow
@@ -79,6 +100,9 @@ async def lifespan(app: FastAPI):
     # Ensure tables exist
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables verified.")
+
+    # Ensure call_id sequence exists and is synced with existing data
+    _sync_call_id_sequence()
 
     # Cleanup runs that were in-progress when the server last stopped
     _cleanup_orphaned_runs()

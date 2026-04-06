@@ -632,11 +632,8 @@ class IngestionService:
             reuse_call_id = None
 
         if not reuse_call_id:
-            from sqlalchemy import func as sa_func, cast, Integer
-            max_num = db.query(sa_func.max(
-                cast(sa_func.replace(Call.call_id, "CALL-", ""), Integer)
-            )).scalar() or 999
-            next_num = max_num + 1
+            from sqlalchemy import text as sa_text
+            next_num = db.execute(sa_text("SELECT nextval('call_id_seq')")).scalar()
         call = Call(
             call_id=reuse_call_id or f"CALL-{next_num}",
             date_time=call_dt,
