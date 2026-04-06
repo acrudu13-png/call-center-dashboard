@@ -631,9 +631,14 @@ class IngestionService:
         else:
             reuse_call_id = None
 
-        call_count = db.query(Call).count()
+        if not reuse_call_id:
+            from sqlalchemy import func as sa_func, cast, Integer
+            max_num = db.query(sa_func.max(
+                cast(sa_func.replace(Call.call_id, "CALL-", ""), Integer)
+            )).scalar() or 999
+            next_num = max_num + 1
         call = Call(
-            call_id=reuse_call_id or f"CALL-{1000 + call_count}",
+            call_id=reuse_call_id or f"CALL-{next_num}",
             date_time=call_dt,
             processed_at=utcnow(),
             agent_name=meta["agent_name"],
