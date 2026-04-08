@@ -71,10 +71,12 @@ def upgrade():
         # Refresh inspector after schema change
         inspector = inspect(conn)
 
-    # 2. Insert default organization (idempotent)
+    # 2. Insert default organization (idempotent).
+    # Specify all columns explicitly because the table may have been created
+    # by Base.metadata.create_all() without the server defaults.
     op.execute(
-        f"INSERT INTO organizations (id, name, slug) "
-        f"VALUES ('{DEFAULT_ORG_ID}', 'Default Organization', 'default') "
+        f"INSERT INTO organizations (id, name, slug, is_active, created_at, updated_at) "
+        f"VALUES ('{DEFAULT_ORG_ID}', 'Default Organization', 'default', true, now(), now()) "
         f"ON CONFLICT (id) DO NOTHING"
     )
 
