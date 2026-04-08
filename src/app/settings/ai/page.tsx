@@ -81,6 +81,9 @@ export default function AISettingsPage() {
 
         const contextData = await fetchSetting<Record<string, unknown>>("call-context").catch(() => null);
         if (contextData?.context) setCallContext(String(contextData.context));
+
+        const vocabData = await fetchSetting<{ words?: string[] }>("custom-vocabulary").catch(() => null);
+        if (vocabData?.words) setVocab(vocabData.words);
       } catch (e) {
         console.error("Failed to load settings", e);
       }
