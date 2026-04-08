@@ -41,6 +41,7 @@ import {
   Cloud,
   FileText,
   CheckCircle2,
+  XCircle,
   Loader2,
   Eye,
   EyeOff,
@@ -91,7 +92,7 @@ export default function IngestionSettingsPage() {
   const [sftp, setSftp] = useState(defaultSftpSettings);
   const [sftpSaving, setSftpSaving] = useState(false);
   const [sftpTesting, setSftpTesting] = useState(false);
-  const [sftpTestResult, setSftpTestResult] = useState<string | null>(null);
+  const [sftpTestResult, setSftpTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [showSftpPassword, setShowSftpPassword] = useState(false);
 
   const [s3, setS3] = useState(defaultS3Settings);
@@ -145,11 +146,19 @@ export default function IngestionSettingsPage() {
   const handleSftpTest = async () => {
     setSftpTesting(true);
     setSftpTestResult(null);
-    const result = await testSftpConnection({
-      host: sftp.host, port: Number(sftp.port), username: sftp.username,
-    });
-    setSftpTestResult(result.message);
-    setSftpTesting(false);
+    try {
+      const result = await testSftpConnection({
+        host: sftp.host, port: Number(sftp.port), username: sftp.username,
+      });
+      setSftpTestResult({ success: result.success, message: result.message });
+    } catch (e) {
+      setSftpTestResult({
+        success: false,
+        message: e instanceof Error ? e.message : "Test failed",
+      });
+    } finally {
+      setSftpTesting(false);
+    }
   };
 
   const handleS3Save = async () => {
@@ -293,9 +302,17 @@ export default function IngestionSettingsPage() {
                   </Button>
                 </div>
                 {sftpTestResult && (
-                  <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">
-                    <CheckCircle2 className="h-4 w-4" />
-                    {sftpTestResult}
+                  <div className={`flex items-center gap-2 text-sm rounded-lg p-3 ${
+                    sftpTestResult.success
+                      ? "text-green-700 bg-green-50 border border-green-200"
+                      : "text-red-700 bg-red-50 border border-red-200"
+                  }`}>
+                    {sftpTestResult.success ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <XCircle className="h-4 w-4" />
+                    )}
+                    {sftpTestResult.message}
                   </div>
                 )}
               </div>
