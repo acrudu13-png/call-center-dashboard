@@ -5,6 +5,7 @@ Revises: 014_call_metadata
 """
 
 from alembic import op
+from sqlalchemy import inspect
 import sqlalchemy as sa
 
 revision = "015_multi_tenant"
@@ -15,88 +16,110 @@ depends_on = None
 DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001"
 
 
-def upgrade():
-    # 1. Create organizations table
-    op.create_table(
-        "organizations",
-        sa.Column("id", sa.String(36), primary_key=True),
-        sa.Column("name", sa.String(200), unique=True, nullable=False),
-        sa.Column("slug", sa.String(100), unique=True, nullable=False, index=True),
-        sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
-    )
+def _has_column(inspector, table: str, column: str) -> bool:
+    if table not in inspector.get_table_names():
+        return False
+    return any(c["name"] == column for c in inspector.get_columns(table))
 
-    # 2. Insert default organization
+
+def _add_org_id_column(inspector, table: str, nullable: bool = False):
+    """Idempotently add organization_id column, backfill, FK, and index to a tenant table.
+    Safe to re-run on partial state (e.g. when create_all already added the column)."""
+    if not _has_column(inspector, table, "organization_id"):
+        # Add as nullable so we can backfill, then alter to NOT NULL if requested
+        op.add_column(table, sa.Column("organization_id", sa.String(36), nullable=True))
+
+    # Backfill any NULL rows
+    op.execute(f"UPDATE {table} SET organization_id = '{DEFAULT_ORG_ID}' WHERE organization_id IS NULL")
+
+    # Set NOT NULL if required
+    if not nullable:
+        op.execute(f"ALTER TABLE {table} ALTER COLUMN organization_id SET NOT NULL")
+
+    # Create FK if not present
+    fks = inspector.get_foreign_keys(table) if table in inspector.get_table_names() else []
+    has_fk = any(
+        fk.get("referred_table") == "organizations"
+        and "organization_id" in (fk.get("constrained_columns") or [])
+        for fk in fks
+    )
+    if not has_fk:
+        op.create_foreign_key(f"fk_{table}_org", table, "organizations", ["organization_id"], ["id"])
+
+    # Create index if not present
+    idx_name = f"ix_{table}_organization_id"
+    existing_idx = {i["name"] for i in inspector.get_indexes(table)} if table in inspector.get_table_names() else set()
+    if idx_name not in existing_idx:
+        op.create_index(idx_name, table, ["organization_id"])
+
+
+def upgrade():
+    conn = op.get_bind()
+    inspector = inspect(conn)
+
+    # 1. Create organizations table (idempotent — may have been created by create_all)
+    if "organizations" not in inspector.get_table_names():
+        op.create_table(
+            "organizations",
+            sa.Column("id", sa.String(36), primary_key=True),
+            sa.Column("name", sa.String(200), unique=True, nullable=False),
+            sa.Column("slug", sa.String(100), unique=True, nullable=False, index=True),
+            sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
+            sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+            sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        )
+        # Refresh inspector after schema change
+        inspector = inspect(conn)
+
+    # 2. Insert default organization (idempotent)
     op.execute(
         f"INSERT INTO organizations (id, name, slug) "
-        f"VALUES ('{DEFAULT_ORG_ID}', 'Default Organization', 'default')"
+        f"VALUES ('{DEFAULT_ORG_ID}', 'Default Organization', 'default') "
+        f"ON CONFLICT (id) DO NOTHING"
     )
 
-    # 3. Add organization_id to all tenant-scoped tables and backfill
+    # 3. Add organization_id to all tenant-scoped tables and backfill (idempotent)
+    _add_org_id_column(inspector, "users", nullable=True)  # nullable for superadmin
+    _add_org_id_column(inspector, "calls", nullable=False)
+    _add_org_id_column(inspector, "qa_rules", nullable=False)
+    _add_org_id_column(inspector, "call_types", nullable=False)
+    _add_org_id_column(inspector, "subdirectories", nullable=False)
+    _add_org_id_column(inspector, "ingestion_runs", nullable=False)
+    _add_org_id_column(inspector, "transcription_jobs", nullable=False)
+    _add_org_id_column(inspector, "log_entries", nullable=False)
 
-    # -- users (nullable for superadmin)
-    op.add_column("users", sa.Column("organization_id", sa.String(36), nullable=True))
-    op.execute(f"UPDATE users SET organization_id = '{DEFAULT_ORG_ID}'")
-    op.create_foreign_key("fk_users_org", "users", "organizations", ["organization_id"], ["id"])
-    op.create_index("ix_users_organization_id", "users", ["organization_id"])
+    # -- settings: change PK from (key) to (organization_id, key) (idempotent)
+    inspector = inspect(conn)
+    if not _has_column(inspector, "settings", "organization_id"):
+        op.add_column("settings", sa.Column("organization_id", sa.String(36), nullable=True))
+        op.execute(f"UPDATE settings SET organization_id = '{DEFAULT_ORG_ID}' WHERE organization_id IS NULL")
 
-    # -- calls
-    op.add_column("calls", sa.Column("organization_id", sa.String(36), nullable=True))
-    op.execute(f"UPDATE calls SET organization_id = '{DEFAULT_ORG_ID}'")
-    op.alter_column("calls", "organization_id", nullable=False)
-    op.create_foreign_key("fk_calls_org", "calls", "organizations", ["organization_id"], ["id"])
-    op.create_index("ix_calls_organization_id", "calls", ["organization_id"])
+        # Drop the old single-column PK and create composite PK
+        op.execute("ALTER TABLE settings DROP CONSTRAINT IF EXISTS settings_pkey")
+        op.execute("ALTER TABLE settings ALTER COLUMN organization_id SET NOT NULL")
+        op.create_primary_key("settings_pkey", "settings", ["organization_id", "key"])
+        op.create_foreign_key("fk_settings_org", "settings", "organizations", ["organization_id"], ["id"])
+    else:
+        # Column exists; backfill any NULLs and ensure NOT NULL
+        op.execute(f"UPDATE settings SET organization_id = '{DEFAULT_ORG_ID}' WHERE organization_id IS NULL")
+        op.execute("ALTER TABLE settings ALTER COLUMN organization_id SET NOT NULL")
 
-    # -- qa_rules
-    op.add_column("qa_rules", sa.Column("organization_id", sa.String(36), nullable=True))
-    op.execute(f"UPDATE qa_rules SET organization_id = '{DEFAULT_ORG_ID}'")
-    op.alter_column("qa_rules", "organization_id", nullable=False)
-    op.create_foreign_key("fk_rules_org", "qa_rules", "organizations", ["organization_id"], ["id"])
-    op.create_index("ix_qa_rules_organization_id", "qa_rules", ["organization_id"])
+        # Make sure PK is composite
+        pk = inspector.get_pk_constraint("settings")
+        pk_cols = set(pk.get("constrained_columns") or [])
+        if pk_cols != {"organization_id", "key"}:
+            op.execute("ALTER TABLE settings DROP CONSTRAINT IF EXISTS settings_pkey")
+            op.create_primary_key("settings_pkey", "settings", ["organization_id", "key"])
 
-    # -- call_types
-    op.add_column("call_types", sa.Column("organization_id", sa.String(36), nullable=True))
-    op.execute(f"UPDATE call_types SET organization_id = '{DEFAULT_ORG_ID}'")
-    op.alter_column("call_types", "organization_id", nullable=False)
-    op.create_foreign_key("fk_call_types_org", "call_types", "organizations", ["organization_id"], ["id"])
-    op.create_index("ix_call_types_organization_id", "call_types", ["organization_id"])
-
-    # -- subdirectories
-    op.add_column("subdirectories", sa.Column("organization_id", sa.String(36), nullable=True))
-    op.execute(f"UPDATE subdirectories SET organization_id = '{DEFAULT_ORG_ID}'")
-    op.alter_column("subdirectories", "organization_id", nullable=False)
-    op.create_foreign_key("fk_subdirectories_org", "subdirectories", "organizations", ["organization_id"], ["id"])
-    op.create_index("ix_subdirectories_organization_id", "subdirectories", ["organization_id"])
-
-    # -- ingestion_runs
-    op.add_column("ingestion_runs", sa.Column("organization_id", sa.String(36), nullable=True))
-    op.execute(f"UPDATE ingestion_runs SET organization_id = '{DEFAULT_ORG_ID}'")
-    op.alter_column("ingestion_runs", "organization_id", nullable=False)
-    op.create_foreign_key("fk_ingestion_runs_org", "ingestion_runs", "organizations", ["organization_id"], ["id"])
-    op.create_index("ix_ingestion_runs_organization_id", "ingestion_runs", ["organization_id"])
-
-    # -- transcription_jobs
-    op.add_column("transcription_jobs", sa.Column("organization_id", sa.String(36), nullable=True))
-    op.execute(f"UPDATE transcription_jobs SET organization_id = '{DEFAULT_ORG_ID}'")
-    op.alter_column("transcription_jobs", "organization_id", nullable=False)
-    op.create_foreign_key("fk_transcription_jobs_org", "transcription_jobs", "organizations", ["organization_id"], ["id"])
-    op.create_index("ix_transcription_jobs_organization_id", "transcription_jobs", ["organization_id"])
-
-    # -- log_entries
-    op.add_column("log_entries", sa.Column("organization_id", sa.String(36), nullable=True))
-    op.execute(f"UPDATE log_entries SET organization_id = '{DEFAULT_ORG_ID}'")
-    op.alter_column("log_entries", "organization_id", nullable=False)
-    op.create_foreign_key("fk_log_entries_org", "log_entries", "organizations", ["organization_id"], ["id"])
-    op.create_index("ix_log_entries_organization_id", "log_entries", ["organization_id"])
-
-    # -- settings: change PK from (key) to (organization_id, key)
-    op.add_column("settings", sa.Column("organization_id", sa.String(36), nullable=True))
-    op.execute(f"UPDATE settings SET organization_id = '{DEFAULT_ORG_ID}'")
-    op.execute("ALTER TABLE settings DROP CONSTRAINT settings_pkey")
-    op.alter_column("settings", "organization_id", nullable=False)
-    op.create_primary_key("settings_pkey", "settings", ["organization_id", "key"])
-    op.create_foreign_key("fk_settings_org", "settings", "organizations", ["organization_id"], ["id"])
+        # Make sure FK exists
+        fks = inspector.get_foreign_keys("settings")
+        has_fk = any(
+            fk.get("referred_table") == "organizations"
+            and "organization_id" in (fk.get("constrained_columns") or [])
+            for fk in fks
+        )
+        if not has_fk:
+            op.create_foreign_key("fk_settings_org", "settings", "organizations", ["organization_id"], ["id"])
 
     # 4. Drop old unique constraints/indexes and create composite ones
     # Original models used unique=True, index=True which may have created unique INDEXES
@@ -141,27 +164,34 @@ def upgrade():
             END $$;
         """)
 
+    def _create_unique_if_missing(name: str, table: str, cols: list[str]):
+        """Create a composite unique constraint only if one with this name doesn't exist."""
+        inspector_local = inspect(conn)
+        existing = {uc["name"] for uc in inspector_local.get_unique_constraints(table)}
+        if name not in existing:
+            op.create_unique_constraint(name, table, cols)
+
     # -- users: drop old unique on username and email
     _drop_unique("users", "username")
     _drop_unique("users", "email")
-    op.create_unique_constraint("uq_users_org_username", "users", ["organization_id", "username"])
-    op.create_unique_constraint("uq_users_org_email", "users", ["organization_id", "email"])
+    _create_unique_if_missing("uq_users_org_username", "users", ["organization_id", "username"])
+    _create_unique_if_missing("uq_users_org_email", "users", ["organization_id", "email"])
 
     # -- calls: drop old unique on call_id
     _drop_unique("calls", "call_id")
-    op.create_unique_constraint("uq_calls_org_call_id", "calls", ["organization_id", "call_id"])
+    _create_unique_if_missing("uq_calls_org_call_id", "calls", ["organization_id", "call_id"])
 
     # -- qa_rules: drop old unique on rule_id
     _drop_unique("qa_rules", "rule_id")
-    op.create_unique_constraint("uq_rules_org_rule_id", "qa_rules", ["organization_id", "rule_id"])
+    _create_unique_if_missing("uq_rules_org_rule_id", "qa_rules", ["organization_id", "rule_id"])
 
     # -- call_types: drop old unique on key
     _drop_unique("call_types", "key")
-    op.create_unique_constraint("uq_call_types_org_key", "call_types", ["organization_id", "key"])
+    _create_unique_if_missing("uq_call_types_org_key", "call_types", ["organization_id", "key"])
 
     # -- subdirectories: drop old unique on key
     _drop_unique("subdirectories", "key")
-    op.create_unique_constraint("uq_subdirectories_org_key", "subdirectories", ["organization_id", "key"])
+    _create_unique_if_missing("uq_subdirectories_org_key", "subdirectories", ["organization_id", "key"])
 
     # 5. Update roles: first admin becomes superadmin (org_id = NULL), others become org_admin
     # The default admin (first admin created) becomes superadmin
