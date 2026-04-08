@@ -57,6 +57,8 @@ export interface QARule {
   isCritical?: boolean;
   direction?: string;    // inbound | outbound | both
   callTypes?: string[];  // [] = all types
+  subdirectories?: string[];  // [] = all subdirectories
+  metadataConditions?: { field: string; operator: string; value: string }[];
   order: number;
 }
 

@@ -58,10 +58,26 @@ class IngestSchedule(BaseModel):
 
 
 class MetadataMapping(BaseModel):
+    """Deprecated — kept for backward compatibility. Use FilenameParserSettings."""
     agentIdField: str = "agent_id"
     customerPhoneField: str = "customer_phone"
     dateTimeField: str = "date_time"
     durationField: str = "duration"
+
+
+class FilenameVariable(BaseModel):
+    name: str       # e.g. "agent_name", "phone", "date", "time"
+    label: str = ""  # human display label
+
+
+class FilenameParserSettings(BaseModel):
+    filenamePattern: str = ""  # regex with named capture groups (?P<name>...)
+    variables: list[FilenameVariable] = []
+    sampleFilenames: list[str] = []  # for live preview in UI
+    useInfoFiles: bool = True  # whether to look for .info companion files
+    recursiveTraversal: bool = False  # date/subdir/files structure
+    audioExtensions: list[str] = [".au", ".wav", ".mp3", ".ogg", ".flac"]
+    durationSource: str = "info_file"  # info_file | audio_probe | transcription
 
 
 class MainPrompt(BaseModel):

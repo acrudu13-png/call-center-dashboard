@@ -19,7 +19,7 @@ from app.schemas.call import (
     TranscriptLineSchema, ScorecardEntrySchema,
 )
 from app.schemas.setting import SftpSettings
-from app.auth import get_current_user, require_role
+from app.auth import get_current_user, require_role, scope_query, get_org_id
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,8 @@ def _call_to_summary(c: Call) -> CallSummary:
         compliancePass=c.compliance_pass,
         direction=c.direction or "unknown",
         callType=c.call_type,
+        subdirectory=c.subdirectory,
+        metadata=c.call_metadata or {},
         isEligible=c.is_eligible if c.is_eligible is not None else True,
         ineligibleReason=c.ineligible_reason,
     )
@@ -70,12 +72,16 @@ def list_calls(
     runId: Optional[str] = None,
     direction: Optional[str] = None,
     callType: Optional[str] = None,
+    subdirectory: Optional[str] = None,
+    metadataField: Optional[str] = None,
+    metadataValue: Optional[str] = None,
     dateFrom: Optional[str] = None,
     dateTo: Optional[str] = None,
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     query = db.query(Call)
+    query = scope_query(query, Call, current_user)
     query = _filter_by_user_agents(query, current_user)
 
     # Filters
@@ -89,6 +95,11 @@ def list_calls(
         query = query.filter(Call.direction == direction)
     if callType:
         query = query.filter(Call.call_type == callType)
+    if subdirectory:
+        query = query.filter(Call.subdirectory == subdirectory)
+    if metadataField and metadataValue:
+        from sqlalchemy import text
+        query = query.filter(text("metadata->>:field = :value").bindparams(field=metadataField, value=metadataValue))
     if dateFrom or dateTo:
         from datetime import datetime, timedelta, timezone
         try:
@@ -121,14 +132,19 @@ def list_calls(
     # Count
     total = query.count()
 
-    # Sort (whitelist to prevent column injection)
+    # Sort (whitelist to prevent column injection, with metadata.* support)
     ALLOWED_SORT = {
         "date_time": Call.date_time, "dateTime": Call.date_time,
         "qa_score": Call.qa_score, "qaScore": Call.qa_score,
         "agent_name": Call.agent_name, "duration": Call.duration,
         "status": Call.status,
     }
-    sort_col = ALLOWED_SORT.get(sortBy, Call.date_time)
+    if sortBy.startswith("metadata."):
+        from sqlalchemy import text as _text
+        field_name = sortBy.split(".", 1)[1]
+        sort_col = _text(f"metadata->>'{field_name}'")
+    else:
+        sort_col = ALLOWED_SORT.get(sortBy, Call.date_time)
     if sortDir == "asc":
         query = query.order_by(sort_col)
     else:
@@ -147,10 +163,42 @@ def list_calls(
     )
 
 
+@router.get("/metadata-fields")
+def metadata_fields(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all unique metadata field names and their sample values across all calls."""
+    from sqlalchemy import text
+    org_id = get_org_id(current_user) if current_user.role != "superadmin" else None
+    if org_id:
+        rows = db.execute(text(
+            "SELECT DISTINCT jsonb_object_keys(metadata::jsonb) AS field FROM calls WHERE organization_id = :org_id AND metadata IS NOT NULL AND metadata::text != '{}'"
+        ), {"org_id": org_id}).fetchall()
+    else:
+        rows = db.execute(text(
+            "SELECT DISTINCT jsonb_object_keys(metadata::jsonb) AS field FROM calls WHERE metadata IS NOT NULL AND metadata::text != '{}'"
+        )).fetchall()
+    fields = sorted([r[0] for r in rows])
+
+    # Get a few unique values per field for filter dropdowns
+    result = {}
+    for field in fields:
+        if org_id:
+            vals = db.execute(text(
+                f"SELECT DISTINCT metadata->>:field AS val FROM calls WHERE organization_id = :org_id AND metadata->>:field IS NOT NULL ORDER BY val LIMIT 50"
+            ), {"field": field, "org_id": org_id}).fetchall()
+        else:
+            vals = db.execute(text(
+                f"SELECT DISTINCT metadata->>:field AS val FROM calls WHERE metadata->>:field IS NOT NULL ORDER BY val LIMIT 50"
+            ), {"field": field}).fetchall()
+        result[field] = [v[0] for v in vals if v[0]]
+
+    return {"fields": result}
+
+
 @router.get("/stats")
 def call_stats(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     """Dashboard statistics — excludes ineligible calls from score/compliance metrics."""
-    base = _filter_by_user_agents(db.query(Call), current_user)
+    base = scope_query(db.query(Call), Call, current_user)
+    base = _filter_by_user_agents(base, current_user)
     eligible = base.filter(Call.is_eligible == True)
     total = base.count()
     completed = base.filter(Call.status == "completed").count()
@@ -181,6 +229,8 @@ def call_stats(current_user=Depends(get_current_user), db: Session = Depends(get
 def list_agents(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     """Get unique agent list with call counts."""
     query = db.query(Call.agent_id, Call.agent_name, func.count(Call.id).label("callCount"))
+    if current_user.role != "superadmin":
+        query = query.filter(Call.organization_id == current_user.organization_id)
     if current_user.allowed_agents:
         query = query.filter(Call.agent_id.in_(current_user.allowed_agents))
     results = query.group_by(Call.agent_id, Call.agent_name).order_by(Call.agent_name).all()
@@ -210,6 +260,8 @@ def agent_stats(current_user=Depends(get_current_user), db: Session = Depends(ge
             func.sum(case((and_(Call.qa_score >= 70, Call.qa_score < 85), 1), else_=0)).label("good_count"),
             func.sum(case((Call.qa_score < 70, 1), else_=0)).label("poor_count"),
         )
+    if current_user.role != "superadmin":
+        query = query.filter(Call.organization_id == current_user.organization_id)
     if current_user.allowed_agents:
         query = query.filter(Call.agent_id.in_(current_user.allowed_agents))
     results = (
@@ -250,12 +302,14 @@ def export_calls_csv(
     maxScore: Optional[float] = None,
     runId: Optional[str] = None,
     includeRules: bool = True,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Export all matching calls as CSV."""
     from datetime import datetime as dt
 
     query = db.query(Call)
+    query = scope_query(query, Call, current_user)
 
     if status:
         query = query.filter(Call.status == status)
@@ -296,11 +350,22 @@ def export_calls_csv(
                 f"{s.score}/{s.max_score} {'PASS' if s.passed else 'FAIL'}"
             )
 
+    # Collect unique metadata field names across all exported calls
+    meta_fields: list[str] = []
+    meta_fields_set: set[str] = set()
+    for c in calls:
+        for key in (c.call_metadata or {}):
+            if key not in meta_fields_set:
+                meta_fields_set.add(key)
+                meta_fields.append(key)
+
     headers = [
         "Call ID", "Date/Time", "Agent Name", "Agent ID", "Customer Phone",
-        "Duration (s)", "QA Score", "Grade", "Status", "Compliance",
+        "Duration (s)", "Direction", "Call Type", "Subdirectory",
+        "QA Score", "Grade", "Status", "Compliance",
         "Critical Failure", "Critical Reason", "AI Summary",
     ]
+    headers += [f"meta:{f}" for f in meta_fields]
     if includeRules:
         headers += rule_titles_set
 
@@ -309,6 +374,7 @@ def export_calls_csv(
     writer.writerow(headers)
 
     for c in calls:
+        meta = c.call_metadata or {}
         row = [
             c.call_id,
             c.date_time.isoformat() if c.date_time else "",
@@ -316,6 +382,9 @@ def export_calls_csv(
             c.agent_id,
             c.customer_phone,
             c.duration,
+            c.direction or "",
+            c.call_type or "",
+            c.subdirectory or "",
             round(c.qa_score, 1) if c.qa_score is not None else "",
             c.ai_grade or "",
             c.status,
@@ -324,6 +393,8 @@ def export_calls_csv(
             c.critical_failure_reason or "",
             (c.ai_summary or "").replace("\n", " "),
         ]
+        for f in meta_fields:
+            row.append(meta.get(f, ""))
         if includeRules:
             sc = scorecard_map.get(c.id, {})
             for title in rule_titles_set:
@@ -343,9 +414,10 @@ def export_calls_csv(
 
 @router.get("/{call_id}", response_model=CallDetail)
 def get_call(call_id: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    call = db.query(Call).filter(
-        (Call.id == call_id) | (Call.call_id == call_id)
-    ).first()
+    q = db.query(Call).filter((Call.id == call_id) | (Call.call_id == call_id))
+    if current_user.role != "superadmin":
+        q = q.filter(Call.organization_id == current_user.organization_id)
+    call = q.first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     if current_user.allowed_agents and call.agent_id not in current_user.allowed_agents:
@@ -378,6 +450,8 @@ def get_call(call_id: str, current_user=Depends(get_current_user), db: Session =
         compliancePass=call.compliance_pass,
         direction=call.direction or "unknown",
         callType=call.call_type,
+        subdirectory=call.subdirectory,
+        metadata=call.call_metadata or {},
         isEligible=call.is_eligible if call.is_eligible is not None else True,
         ineligibleReason=call.ineligible_reason,
         transcript=transcript,
@@ -398,10 +472,11 @@ def get_call(call_id: str, current_user=Depends(get_current_user), db: Session =
 
 
 @router.patch("/{call_id}/status")
-def update_call_status(call_id: str, status: str, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
-    call = db.query(Call).filter(
-        (Call.id == call_id) | (Call.call_id == call_id)
-    ).first()
+def update_call_status(call_id: str, status: str, _user=Depends(require_role("org_admin", "manager")), db: Session = Depends(get_db)):
+    q = db.query(Call).filter((Call.id == call_id) | (Call.call_id == call_id))
+    if _user.role != "superadmin":
+        q = q.filter(Call.organization_id == _user.organization_id)
+    call = q.first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     if _user.allowed_agents and call.agent_id not in _user.allowed_agents:
@@ -414,10 +489,11 @@ def update_call_status(call_id: str, status: str, _user=Depends(require_role("ad
 
 
 @router.delete("/{call_id}")
-def delete_call(call_id: str, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
-    call = db.query(Call).filter(
-        (Call.id == call_id) | (Call.call_id == call_id)
-    ).first()
+def delete_call(call_id: str, _user=Depends(require_role("org_admin", "manager")), db: Session = Depends(get_db)):
+    q = db.query(Call).filter((Call.id == call_id) | (Call.call_id == call_id))
+    if _user.role != "superadmin":
+        q = q.filter(Call.organization_id == _user.organization_id)
+    call = q.first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     if _user.allowed_agents and call.agent_id not in _user.allowed_agents:
@@ -468,9 +544,10 @@ async def get_call_audio(
     """
     Download audio from SFTP on demand, convert .au to .wav, cache locally, and stream back.
     """
-    call = db.query(Call).filter(
-        (Call.id == call_id) | (Call.call_id == call_id)
-    ).first()
+    q = db.query(Call).filter((Call.id == call_id) | (Call.call_id == call_id))
+    if user.role != "superadmin":
+        q = q.filter(Call.organization_id == user.organization_id)
+    call = q.first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     if user.allowed_agents and call.agent_id not in user.allowed_agents:
@@ -493,18 +570,29 @@ async def get_call_audio(
     # Stored path: /tmp/call_recordings/2026-03-15/TELERENTA_...au
     # SFTP path:   /tlr-cs-recordings/2026-03-15/TELERENTA_...au
     from app.services.settings_service import get_setting
-    sftp_settings = get_setting(db, "sftp", SftpSettings)
+    sftp_settings = get_setting(db, "sftp", SftpSettings, user.organization_id)
     if not sftp_settings.host:
         raise HTTPException(status_code=500, detail="SFTP settings not configured")
 
-    # Extract the date folder + filename from local path
+    # Reconstruct SFTP remote path from the stored local path.
+    # Local temp dir is /tmp/call_recordings. Everything after that mirrors the SFTP structure.
+    # Examples:
+    #   /tmp/call_recordings/2026-03-15/TELERENTA_...au → base/2026-03-15/TELERENTA_...au
+    #   /tmp/call_recordings/D_2025-11-14/INBOUND_SEARA/E_...wav → base/D_2025-11-14/INBOUND_SEARA/E_...wav
     stored_path = call.audio_file_path
-    filename = os.path.basename(stored_path)
-    date_folder = os.path.basename(os.path.dirname(stored_path))
+    base_remote = sftp_settings.remotePath.split("$")[0].rstrip("/")
 
-    # Build the SFTP remote path: base_remote_path/date_folder/filename
-    base_remote = sftp_settings.remotePath.split("$")[0].rstrip("/")  # e.g. /tlr-cs-recordings
-    remote_path = f"{base_remote}/{date_folder}/{filename}"
+    # Find the relative path after "call_recordings/"
+    marker = "/call_recordings/"
+    idx = stored_path.find(marker)
+    if idx >= 0:
+        relative = stored_path[idx + len(marker):]  # e.g. "D_2025-11-14/INBOUND_SEARA/file.wav"
+        remote_path = f"{base_remote}/{relative}"
+    else:
+        # Fallback: just use parent dir + filename
+        filename = os.path.basename(stored_path)
+        date_folder = os.path.basename(os.path.dirname(stored_path))
+        remote_path = f"{base_remote}/{date_folder}/{filename}"
 
     logger.info(f"Downloading audio for {call.call_id} from SFTP: {remote_path}")
 

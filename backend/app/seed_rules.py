@@ -1,9 +1,14 @@
 """
 Seed QA rules into the database — matching the Telerenta scoring system.
 Run inside Docker: python -m app.seed_rules
+
+Optional environment variable:
+  SEED_ORG_SLUG  — slug of the organization to seed rules into (default: "default")
 """
+import os
 from app.database import SessionLocal, engine, Base
 from app.models.rule import QARule
+from app.models.organization import Organization
 
 Base.metadata.create_all(bind=engine)
 
@@ -58,19 +63,32 @@ RULES = [
 def seed():
     db = SessionLocal()
     try:
-        existing = db.query(QARule).count()
+        # Resolve target organization
+        slug = os.getenv("SEED_ORG_SLUG", "default")
+        org = db.query(Organization).filter(Organization.slug == slug).first()
+        if not org:
+            print(f"Organization with slug '{slug}' not found. Available organizations:")
+            for o in db.query(Organization).all():
+                print(f"  - {o.slug} ({o.name})")
+            return
+        print(f"Seeding rules into organization: {org.name} ({org.slug})")
+
+        existing = db.query(QARule).filter(QARule.organization_id == org.id).count()
         if existing > 0:
-            print(f"Already {existing} rules in DB. Deleting and re-seeding...")
-            db.query(QARule).delete()
+            print(f"Already {existing} rules in this org. Deleting and re-seeding...")
+            db.query(QARule).filter(QARule.organization_id == org.id).delete()
             db.commit()
 
         for r in RULES:
-            db.add(QARule(**r, enabled=True))
+            db.add(QARule(organization_id=org.id, enabled=True, **r))
         db.commit()
         print(f"Seeded {len(RULES)} QA rules successfully.")
 
         # Verify
-        count = db.query(QARule).filter(QARule.enabled == True).count()
+        count = db.query(QARule).filter(
+            QARule.organization_id == org.id,
+            QARule.enabled == True,
+        ).count()
         total_score = sum(r["max_score"] for r in RULES if r["rule_type"] == "scoring")
         print(f"Active rules: {count}, Total max score: {total_score}")
     finally:

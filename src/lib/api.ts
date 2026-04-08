@@ -52,6 +52,8 @@ export interface CallSummary {
   compliancePass: boolean;
   direction: string;
   callType?: string | null;
+  subdirectory?: string | null;
+  metadata?: Record<string, string>;
   isEligible: boolean;
   ineligibleReason?: string | null;
 }
@@ -110,6 +112,9 @@ export async function fetchCalls(params: {
   runId?: string;
   direction?: string;
   callType?: string;
+  subdirectory?: string;
+  metadataField?: string;
+  metadataValue?: string;
   dateFrom?: string;
   dateTo?: string;
 } = {}): Promise<CallListResponse> {
@@ -122,6 +127,10 @@ export async function fetchCalls(params: {
 
 export async function fetchCall(callId: string): Promise<CallDetail> {
   return apiFetch(`/api/calls/${callId}`);
+}
+
+export async function fetchMetadataFields(): Promise<{ fields: Record<string, string[]> }> {
+  return apiFetch("/api/calls/metadata-fields");
 }
 
 export async function fetchCallStats(): Promise<{
@@ -202,6 +211,8 @@ export interface QARule {
   is_critical: boolean;
   direction: string;
   call_types: string[];
+  subdirectories: string[];
+  metadata_conditions: { field: string; operator: string; value: string }[];
   sort_order: number;
 }
 
@@ -296,6 +307,10 @@ export async function saveSetting<T>(key: string, data: T): Promise<T> {
     method: "PUT",
     body: JSON.stringify(data),
   });
+}
+
+export async function fetchSampleFilenames(): Promise<{ filenames: string[]; error?: string }> {
+  return apiFetch("/api/settings/sftp/sample-files");
 }
 
 export async function testConnection(key: string): Promise<{
@@ -520,6 +535,8 @@ export interface UserInfo {
   is_active: boolean;
   allowed_agents: string[];
   allowed_pages: string[];
+  organization_id?: string | null;
+  organization_name?: string | null;
 }
 
 export async function fetchUsers(): Promise<{ users: UserInfo[]; total: number }> {
@@ -557,6 +574,134 @@ export async function updateUser(userId: string, data: {
 
 export async function deleteUser(userId: string): Promise<void> {
   return apiFetch(`/api/auth/users/${userId}`, { method: "DELETE" });
+}
+
+// ── Subdirectories ────────────────────────────────────────
+
+export interface SubdirectoryInfo {
+  id: number;
+  key: string;
+  display_name: string;
+  direction: string;
+  enabled: boolean;
+  discovered_from?: string | null;
+}
+
+export async function fetchSubdirectories(): Promise<SubdirectoryInfo[]> {
+  return apiFetch("/api/subdirectories");
+}
+
+export async function createSubdirectory(data: { key: string; display_name?: string; direction?: string; enabled?: boolean }): Promise<SubdirectoryInfo> {
+  return apiFetch("/api/subdirectories", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateSubdirectory(key: string, data: { display_name?: string; direction?: string; enabled?: boolean }): Promise<SubdirectoryInfo> {
+  return apiFetch(`/api/subdirectories/${key}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteSubdirectory(key: string): Promise<void> {
+  return apiFetch(`/api/subdirectories/${key}`, { method: "DELETE" });
+}
+
+// ── Organizations (superadmin) ────────────────────────────
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  created_at: string;
+  user_count: number;
+  call_count: number;
+}
+
+export interface OrganizationListResponse {
+  organizations: Organization[];
+  total: number;
+}
+
+export async function fetchOrganizations(): Promise<OrganizationListResponse> {
+  return apiFetch("/api/organizations");
+}
+
+export async function createOrganization(data: { name: string; slug: string }): Promise<Organization> {
+  return apiFetch("/api/organizations", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchOrganization(orgId: string): Promise<Organization> {
+  return apiFetch(`/api/organizations/${orgId}`);
+}
+
+export async function updateOrganization(
+  orgId: string,
+  data: { name?: string; is_active?: boolean }
+): Promise<Organization> {
+  return apiFetch(`/api/organizations/${orgId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteOrganization(orgId: string): Promise<void> {
+  return apiFetch(`/api/organizations/${orgId}`, { method: "DELETE" });
+}
+
+export interface OrgUserCreate {
+  username: string;
+  email: string;
+  password: string;
+  full_name?: string;
+  role: "org_admin" | "manager" | "viewer";
+  allowed_agents?: string[];
+  allowed_pages?: string[];
+}
+
+export async function fetchOrgUsers(orgId: string): Promise<{ users: UserInfo[]; total: number }> {
+  return apiFetch(`/api/organizations/${orgId}/users`);
+}
+
+export async function createOrgUser(orgId: string, data: OrgUserCreate): Promise<UserInfo> {
+  return apiFetch(`/api/organizations/${orgId}/users`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// ── Platform usage (superadmin) ───────────────────────────
+
+export interface OrganizationUsageStats {
+  organization_id: string;
+  organization_name: string;
+  organization_slug: string;
+  is_active: boolean;
+  user_count: number;
+  call_count: number;
+  completed_calls: number;
+  flagged_calls: number;
+  rules_count: number;
+  last_ingestion_at: string | null;
+  total_ingestion_runs: number;
+}
+
+export interface PlatformUsageResponse {
+  total_organizations: number;
+  active_organizations: number;
+  total_users: number;
+  total_calls: number;
+  organizations: OrganizationUsageStats[];
+}
+
+export async function fetchPlatformUsage(): Promise<PlatformUsageResponse> {
+  return apiFetch("/api/admin/usage");
 }
 
 // ── Health ─────────────────────────────────────────────────

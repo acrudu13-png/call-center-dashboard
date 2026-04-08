@@ -6,7 +6,7 @@ from typing import Optional
 from app.database import get_db, SessionLocal
 from app.database import utcnow, APP_TZ
 from app.services.ingestion_service import IngestionService
-from app.auth import get_current_user, require_role, require_page
+from app.auth import get_current_user, require_role, require_page, get_org_id, scope_query
 
 router = APIRouter(prefix="/api/ingestion", tags=["ingestion"], dependencies=[Depends(require_page("logs", "ingestion"))])
 
@@ -20,11 +20,11 @@ def _ts(dt) -> str | None:
     return dt.isoformat()
 
 
-async def _run_ingestion_bg(source: str, remote_path: Optional[str] = None, resume_run_id: Optional[str] = None):
+async def _run_ingestion_bg(source: str, remote_path: Optional[str] = None, resume_run_id: Optional[str] = None, org_id: str = None):
     """Background task to run ingestion with its own DB session."""
     db = SessionLocal()
     try:
-        svc = IngestionService(db)
+        svc = IngestionService(db, org_id=org_id)
         await svc.run_ingestion(source=source, remote_path=remote_path, resume_run_id=resume_run_id)
     finally:
         db.close()
@@ -34,16 +34,17 @@ async def _run_ingestion_bg(source: str, remote_path: Optional[str] = None, resu
 async def trigger_ingestion(
     source: str = "sftp",
     remote_path: Optional[str] = None,
-    _user=Depends(require_role("admin", "manager")),
+    _user=Depends(require_role("org_admin", "manager")),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """Manually trigger an ingestion run. Runs in background."""
-    background_tasks.add_task(_run_ingestion_bg, source, remote_path)
+    org_id = get_org_id(_user)
+    background_tasks.add_task(_run_ingestion_bg, source, remote_path, None, org_id)
     return {"message": f"Ingestion triggered from {source}. Check /api/logs for progress."}
 
 
 @router.post("/stop")
-def stop_ingestion(run_id: Optional[str] = None, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
+def stop_ingestion(run_id: Optional[str] = None, _user=Depends(require_role("org_admin", "manager")), db: Session = Depends(get_db)):
     """
     Stop a running ingestion.
 
@@ -59,12 +60,13 @@ def stop_ingestion(run_id: Optional[str] = None, _user=Depends(require_role("adm
 
     # If no in-memory flag, check DB for orphaned runs
     if not target:
-        orphan = (
+        orphan_q = (
             db.query(IngestionRun)
             .filter(IngestionRun.status.in_(["downloading", "processing"]))
-            .order_by(IngestionRun.started_at.desc())
-            .first()
         )
+        if _user.role != "superadmin":
+            orphan_q = orphan_q.filter(IngestionRun.organization_id == _user.organization_id)
+        orphan = orphan_q.order_by(IngestionRun.started_at.desc()).first()
         if orphan:
             target = orphan.run_id
 
@@ -81,7 +83,10 @@ def stop_ingestion(run_id: Optional[str] = None, _user=Depends(require_role("adm
                 "message": f"Stop signal sent to {target}. Will stop after current file."}
 
     # Process is dead (orphaned) — update DB directly
-    run = db.query(IngestionRun).filter(IngestionRun.run_id == target).first()
+    run_q = db.query(IngestionRun).filter(IngestionRun.run_id == target)
+    if _user.role != "superadmin":
+        run_q = run_q.filter(IngestionRun.organization_id == _user.organization_id)
+    run = run_q.first()
     if run and run.status in ("downloading", "processing"):
         run.status = "stopped"
         run.current_file = None
@@ -104,26 +109,29 @@ def _broadcast_run_from_db(run):
         "errorMessage": run.error_message,
         "startedAt": _ts(run.started_at),
         "completedAt": _ts(run.completed_at),
-    })
+    }, org_id=run.organization_id)
 
 
 @router.post("/rerun/{run_id}")
 async def rerun_ingestion(
     run_id: str,
-    _user=Depends(require_role("admin", "manager")),
+    _user=Depends(require_role("org_admin", "manager")),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
 ):
     """Resume a stopped/failed ingestion — continues the same run, skipping completed files."""
     from app.models.job import IngestionRun
 
-    run = db.query(IngestionRun).filter(IngestionRun.run_id == run_id).first()
+    run_q = db.query(IngestionRun).filter(IngestionRun.run_id == run_id)
+    if _user.role != "superadmin":
+        run_q = run_q.filter(IngestionRun.organization_id == _user.organization_id)
+    run = run_q.first()
     if not run:
         return {"rerun": False, "message": f"Run {run_id} not found."}
     if run.status in ("downloading", "processing", "stopping"):
         return {"rerun": False, "message": f"Run {run_id} is still active."}
 
-    background_tasks.add_task(_run_ingestion_bg, run.source, run.remote_path, run.run_id)
+    background_tasks.add_task(_run_ingestion_bg, run.source, run.remote_path, run.run_id, run.organization_id)
     return {
         "rerun": True,
         "runId": run_id,
@@ -132,13 +140,15 @@ async def rerun_ingestion(
 
 
 @router.get("/runs-list")
-def runs_list(db: Session = Depends(get_db)):
+def runs_list(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Return a compact list of all runs for use in filter dropdowns."""
     from app.models.job import IngestionRun
     import os
 
+    query = db.query(IngestionRun)
+    query = scope_query(query, IngestionRun, current_user)
     runs = (
-        db.query(IngestionRun)
+        query
         .order_by(desc(IngestionRun.started_at))
         .limit(50)
         .all()
@@ -159,11 +169,14 @@ def runs_list(db: Session = Depends(get_db)):
 
 
 @router.delete("/run/{run_id}")
-def delete_run(run_id: str, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
+def delete_run(run_id: str, _user=Depends(require_role("org_admin", "manager")), db: Session = Depends(get_db)):
     """Delete a stopped/failed/completed run and its associated jobs and log entries."""
     from app.models.job import IngestionRun, TranscriptionJob, LogEntry
 
-    run = db.query(IngestionRun).filter(IngestionRun.run_id == run_id).first()
+    run_q = db.query(IngestionRun).filter(IngestionRun.run_id == run_id)
+    if _user.role != "superadmin":
+        run_q = run_q.filter(IngestionRun.organization_id == _user.organization_id)
+    run = run_q.first()
     if not run:
         return {"deleted": False, "message": f"Run {run_id} not found."}
     if run.status in ("downloading", "processing", "stopping"):
@@ -171,16 +184,26 @@ def delete_run(run_id: str, _user=Depends(require_role("admin", "manager")), db:
 
     # Delete associated calls (and their transcripts + scorecards via cascade)
     from app.models.call import Call
-    calls_deleted = db.query(Call).filter(Call.ingestion_run_id == run_id).delete(synchronize_session=False)
+    calls_deleted = db.query(Call).filter(
+        Call.organization_id == run.organization_id,
+        Call.ingestion_run_id == run_id,
+    ).delete(synchronize_session=False)
 
-    # Delete associated jobs and logs
+    # Delete associated jobs and logs (scoped to this run's org)
     job_ids = [j.job_id for j in db.query(TranscriptionJob.job_id).filter(
+        TranscriptionJob.organization_id == run.organization_id,
         TranscriptionJob.started_at >= run.started_at,
         TranscriptionJob.started_at <= (run.completed_at or utcnow()),
     ).all()]
     if job_ids:
-        db.query(LogEntry).filter(LogEntry.job_id.in_(job_ids)).delete(synchronize_session=False)
-        db.query(TranscriptionJob).filter(TranscriptionJob.job_id.in_(job_ids)).delete(synchronize_session=False)
+        db.query(LogEntry).filter(
+            LogEntry.organization_id == run.organization_id,
+            LogEntry.job_id.in_(job_ids),
+        ).delete(synchronize_session=False)
+        db.query(TranscriptionJob).filter(
+            TranscriptionJob.organization_id == run.organization_id,
+            TranscriptionJob.job_id.in_(job_ids),
+        ).delete(synchronize_session=False)
 
     db.delete(run)
     db.commit()
@@ -188,14 +211,12 @@ def delete_run(run_id: str, _user=Depends(require_role("admin", "manager")), db:
 
 
 @router.get("/status")
-def ingestion_status(db: Session = Depends(get_db)):
+def ingestion_status(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Check if there are any active ingestion jobs."""
     from app.models.job import TranscriptionJob
-    active = (
-        db.query(TranscriptionJob)
-        .filter(TranscriptionJob.status.in_(["queued", "transcribing", "analyzing"]))
-        .count()
-    )
+    query = db.query(TranscriptionJob).filter(TranscriptionJob.status.in_(["queued", "transcribing", "analyzing"]))
+    query = scope_query(query, TranscriptionJob, current_user)
+    active = query.count()
     return {"activeJobs": active, "isRunning": active > 0}
 
 
@@ -203,12 +224,15 @@ def ingestion_status(db: Session = Depends(get_db)):
 def ingestion_progress(
     limit: int = Query(5, ge=1, le=50),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Get the latest ingestion run(s) with full progress info."""
     from app.models.job import IngestionRun
 
+    query = db.query(IngestionRun)
+    query = scope_query(query, IngestionRun, current_user)
     runs = (
-        db.query(IngestionRun)
+        query
         .order_by(desc(IngestionRun.started_at))
         .limit(limit)
         .all()

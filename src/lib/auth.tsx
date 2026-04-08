@@ -20,12 +20,16 @@ interface User {
   is_active: boolean;
   allowed_agents: string[];
   allowed_pages: string[];
+  organization_id: string | null;
+  organization_name: string | null;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
+  isSuperadmin: boolean;
+  isOrgAdmin: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -34,6 +38,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   token: null,
   loading: true,
+  isSuperadmin: false,
+  isOrgAdmin: false,
   login: async () => {},
   logout: () => {},
 });
@@ -150,8 +156,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [fetchMe]
   );
 
+  const isSuperadmin = user?.role === "superadmin";
+  const isOrgAdmin = user?.role === "org_admin" || user?.role === "superadmin";
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, token, loading, isSuperadmin, isOrgAdmin, login, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -12,6 +12,8 @@ class QARuleBase(BaseModel):
     is_critical: bool = False
     direction: str = "both"  # inbound | outbound | both
     call_types: list[str] = []  # [] = all types
+    subdirectories: list[str] = []  # [] = all subdirectories
+    metadata_conditions: list[dict] = []  # [{"field":"x","operator":"equals","value":"y"}]
     sort_order: int = 0
 
 
@@ -29,6 +31,8 @@ class QARuleUpdate(BaseModel):
     is_critical: Optional[bool] = None
     direction: Optional[str] = None
     call_types: Optional[list[str]] = None
+    subdirectories: Optional[list[str]] = None
+    metadata_conditions: Optional[list[dict]] = None
     sort_order: Optional[int] = None
 
 

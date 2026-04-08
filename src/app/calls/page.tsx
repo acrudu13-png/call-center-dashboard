@@ -42,7 +42,7 @@ import {
   PhoneIncoming,
   PhoneOutgoing,
 } from "lucide-react";
-import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, fetchCallTypes, bulkReanalyze, bulkReclassify, stopBulkReanalyze, type CallSummary, type QARule, type IngestionRunListItem, type CallTypeInfo } from "@/lib/api";
+import { fetchCalls, fetchRules, fetchIngestionRunsList, fetchAgents, fetchCallTypes, fetchSubdirectories, fetchMetadataFields, bulkReanalyze, bulkReclassify, stopBulkReanalyze, type CallSummary, type QARule, type IngestionRunListItem, type CallTypeInfo, type SubdirectoryInfo } from "@/lib/api";
 import { RotateCcw, Square, Tag } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useIngestionSocket } from "@/lib/useIngestionSocket";
@@ -69,6 +69,7 @@ export default function CallsExplorerPage() {
   const [agents, setAgents] = useState<{ agentId: string; agentName: string; callCount: number }[]>([]);
   const [directionFilter, setDirectionFilter] = useState("all");
   const [callTypeFilter, setCallTypeFilter] = useState("all");
+  const [subdirFilter, setSubdirFilter] = useState("all");
   const [runFilter, setRunFilter] = useState("all");
   const [ingestionRuns, setIngestionRuns] = useState<IngestionRunListItem[]>([]);
   const [dateFrom, setDateFrom] = useState("");
@@ -87,6 +88,10 @@ export default function CallsExplorerPage() {
   const [bulkAnalyzing, setBulkAnalyzing] = useState(false);
   const [rules, setRules] = useState<QARule[]>([]);
   const [callTypesList, setCallTypesList] = useState<CallTypeInfo[]>([]);
+  const [subdirsList, setSubdirsList] = useState<SubdirectoryInfo[]>([]);
+  const [metaFields, setMetaFields] = useState<Record<string, string[]>>({});
+  const [metaFilterField, setMetaFilterField] = useState("all");
+  const [metaFilterValue, setMetaFilterValue] = useState("all");
   const { reanalyzingCallIds, lastCallUpdate } = useIngestionSocket();
 
   function getQAStatus(score: number): "Passed" | "Average" | "Failed" {
@@ -100,6 +105,8 @@ export default function CallsExplorerPage() {
     fetchRules().then(setRules).catch(() => {});
     fetchAgents().then(setAgents).catch(() => {});
     fetchCallTypes().then(setCallTypesList).catch(() => {});
+    fetchSubdirectories().then(setSubdirsList).catch(() => {});
+    fetchMetadataFields().then((res) => setMetaFields(res.fields)).catch(() => {});
     fetchIngestionRunsList().then((res) => setIngestionRuns(res.runs)).catch(() => {});
   }, []);
 
@@ -124,6 +131,9 @@ export default function CallsExplorerPage() {
         agentId: agentFilter !== "all" ? agentFilter : undefined,
         direction: directionFilter !== "all" ? directionFilter : undefined,
         callType: callTypeFilter !== "all" ? callTypeFilter : undefined,
+        subdirectory: subdirFilter !== "all" ? subdirFilter : undefined,
+        metadataField: metaFilterField !== "all" ? metaFilterField : undefined,
+        metadataValue: metaFilterField !== "all" && metaFilterValue !== "all" ? metaFilterValue : undefined,
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
       });
@@ -135,7 +145,7 @@ export default function CallsExplorerPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, sortKey, sortDir, statusFilter, minScore, maxScore, runFilter, agentFilter, directionFilter, callTypeFilter, dateFrom, dateTo]);
+  }, [page, pageSize, search, sortKey, sortDir, statusFilter, minScore, maxScore, runFilter, agentFilter, directionFilter, callTypeFilter, subdirFilter, metaFilterField, metaFilterValue, dateFrom, dateTo]);
 
   useEffect(() => {
     loadCalls();
@@ -151,7 +161,7 @@ export default function CallsExplorerPage() {
   // Reset page on filter change
   useEffect(() => {
     setPage(1);
-  }, [search, minScore, maxScore, statusFilter, ruleFilter, runFilter, agentFilter, directionFilter, callTypeFilter, dateFrom, dateTo, sortKey, sortDir]);
+  }, [search, minScore, maxScore, statusFilter, ruleFilter, runFilter, agentFilter, directionFilter, callTypeFilter, subdirFilter, metaFilterField, metaFilterValue, dateFrom, dateTo, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -185,12 +195,15 @@ export default function CallsExplorerPage() {
     setAgentFilter("all");
     setDirectionFilter("all");
     setCallTypeFilter("all");
+    setSubdirFilter("all");
+    setMetaFilterField("all");
+    setMetaFilterValue("all");
     setRunFilter("all");
     setDateFrom("");
     setDateTo("");
   };
 
-  const hasActiveFilters = minScore || maxScore || statusFilter !== "all" || ruleFilter !== "all" || agentFilter !== "all" || directionFilter !== "all" || callTypeFilter !== "all" || runFilter !== "all" || dateFrom || dateTo;
+  const hasActiveFilters = minScore || maxScore || statusFilter !== "all" || ruleFilter !== "all" || agentFilter !== "all" || directionFilter !== "all" || callTypeFilter !== "all" || subdirFilter !== "all" || metaFilterField !== "all" || runFilter !== "all" || dateFrom || dateTo;
 
   const handleBulkReanalyze = async () => {
     const msg = hasActiveFilters
@@ -369,6 +382,60 @@ export default function CallsExplorerPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {subdirsList.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>Subdirector</Label>
+                    <Select value={subdirFilter} onValueChange={(v) => v && setSubdirFilter(v)}>
+                      <SelectTrigger>
+                        <SelectValue>
+                          {subdirFilter === "all" ? "Toate subdirectoarele" : subdirsList.find(s => s.key === subdirFilter)?.display_name || subdirFilter}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Toate subdirectoarele</SelectItem>
+                        {subdirsList.map((sd) => (
+                          <SelectItem key={sd.key} value={sd.key}>
+                            {sd.display_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {Object.keys(metaFields).length > 0 && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label>Metadata field</Label>
+                      <Select value={metaFilterField} onValueChange={(v) => { v && setMetaFilterField(v); setMetaFilterValue("all"); }}>
+                        <SelectTrigger>
+                          <SelectValue>{metaFilterField === "all" ? "All fields" : metaFilterField}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All fields</SelectItem>
+                          {Object.keys(metaFields).map((f) => (
+                            <SelectItem key={f} value={f}>{f}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {metaFilterField !== "all" && metaFields[metaFilterField] && (
+                      <div className="space-y-1.5">
+                        <Label>Metadata value</Label>
+                        <Select value={metaFilterValue} onValueChange={(v) => v && setMetaFilterValue(v)}>
+                          <SelectTrigger>
+                            <SelectValue>{metaFilterValue === "all" ? "All values" : metaFilterValue}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All values</SelectItem>
+                            {metaFields[metaFilterField].map((val) => (
+                              <SelectItem key={val} value={val}>{val}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div className="space-y-1.5">
                   <Label>{t.calls.minScore}</Label>
                   <Input type="number" placeholder="0" value={minScore} onChange={(e) => setMinScore(e.target.value)} />
@@ -467,6 +534,9 @@ export default function CallsExplorerPage() {
                       )}
                       {call.callType && (
                         <span className="text-xs text-muted-foreground block">{callTypesList.find(ct => ct.key === call.callType)?.name || call.callType}</span>
+                      )}
+                      {call.subdirectory && (
+                        <span className="text-xs text-muted-foreground block">{call.subdirectory}</span>
                       )}
                     </div>
                   </TableCell>

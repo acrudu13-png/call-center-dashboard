@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { IngestionRun, LogEntry, Job } from "@/lib/api";
-import { WS_URL } from "@/lib/config";
+import { WS_URL, TOKEN_KEY } from "@/lib/config";
 const RECONNECT_DELAY = 2000;
 
 export interface CallUpdateEvent {
@@ -69,7 +69,17 @@ class IngestionSocket {
   private connect() {
     if (this.ws) return;
     try {
-      this.ws = new WebSocket(WS_URL);
+      // Attach the auth token so the backend can scope WS broadcasts to this org.
+      const token = typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
+      if (!token) {
+        // Not authenticated yet — retry later
+        this.reconnectTimer = setTimeout(() => this.connect(), RECONNECT_DELAY);
+        return;
+      }
+      const url = WS_URL.includes("?")
+        ? `${WS_URL}&token=${encodeURIComponent(token)}`
+        : `${WS_URL}?token=${encodeURIComponent(token)}`;
+      this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
         this.state = { ...this.state, connected: true };

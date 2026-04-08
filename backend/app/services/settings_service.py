@@ -20,9 +20,13 @@ SENSITIVE_FIELDS: dict[str, list[str]] = {
 }
 
 
-def get_setting(db: Session, key: str, default_cls):
-    """Load a setting from DB, decrypting sensitive fields."""
-    row = db.query(Setting).filter(Setting.key == key).first()
+def get_setting(db: Session, key: str, default_cls, org_id: str = None):
+    """Load a setting from DB, decrypting sensitive fields.
+    If org_id is None, falls back to first matching row (backward compat for scheduler)."""
+    if org_id:
+        row = db.query(Setting).filter(Setting.organization_id == org_id, Setting.key == key).first()
+    else:
+        row = db.query(Setting).filter(Setting.key == key).first()
     if row and row.value:
         data = json.loads(row.value)
         for field in SENSITIVE_FIELDS.get(key, []):
@@ -35,9 +39,12 @@ def get_setting(db: Session, key: str, default_cls):
     return default_cls()
 
 
-def save_setting(db: Session, key: str, data):
+def save_setting(db: Session, key: str, data, org_id: str = None):
     """Save a setting to DB, encrypting sensitive fields."""
-    row = db.query(Setting).filter(Setting.key == key).first()
+    if org_id:
+        row = db.query(Setting).filter(Setting.organization_id == org_id, Setting.key == key).first()
+    else:
+        row = db.query(Setting).filter(Setting.key == key).first()
     data_dict = data.model_dump()
     for field in SENSITIVE_FIELDS.get(key, []):
         if field in data_dict and data_dict[field] and not is_encrypted(data_dict[field]):
@@ -46,7 +53,7 @@ def save_setting(db: Session, key: str, data):
     if row:
         row.value = value
     else:
-        row = Setting(key=key, value=value)
+        row = Setting(organization_id=org_id, key=key, value=value)
         db.add(row)
     db.commit()
     return data  # return original (unencrypted) for the response

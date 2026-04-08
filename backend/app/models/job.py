@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Integer, Float, DateTime, Text, JSON, Boolean
+from sqlalchemy import String, Integer, Float, DateTime, Text, JSON, Boolean, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base, utcnow
 
@@ -9,6 +9,9 @@ class IngestionRun(Base):
     __tablename__ = "ingestion_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id"), nullable=False, index=True
+    )
     run_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     source: Mapped[str] = mapped_column(String(10))  # sftp | s3
     status: Mapped[str] = mapped_column(
@@ -29,6 +32,9 @@ class TranscriptionJob(Base):
     __tablename__ = "transcription_jobs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id"), nullable=False, index=True
+    )
     job_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     file_name: Mapped[str] = mapped_column(String(300))
     source: Mapped[str] = mapped_column(String(10))  # sftp | s3
@@ -48,6 +54,9 @@ class LogEntry(Base):
     __tablename__ = "log_entries"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id"), nullable=False, index=True
+    )
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     level: Mapped[str] = mapped_column(String(10), default="info")  # info | warn | error | debug
     source: Mapped[str] = mapped_column(String(50))  # ingestion | transcription | analysis | webhook

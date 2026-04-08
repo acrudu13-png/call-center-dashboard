@@ -24,7 +24,7 @@ from app.services.webhook_service import WebhookService
 from app.schemas.setting import (
     SftpSettings, S3Settings, SonioxSettings, LlmSettings, WebhookSettings,
     MetadataMapping, CallContext, CustomVocabulary, IngestSchedule,
-    ClassificationSettings,
+    ClassificationSettings, FilenameParserSettings,
 )
 from app.ws_manager import manager
 
@@ -173,19 +173,19 @@ def get_active_run_id() -> Optional[str]:
 
 # ── Helpers ──────────────────────────────────────────────────
 
-def _get_setting(db: Session, key: str, default_cls):
+def _get_setting(db: Session, key: str, default_cls, org_id: str = None):
     from app.services.settings_service import get_setting
-    return get_setting(db, key, default_cls)
+    return get_setting(db, key, default_cls, org_id)
 
 
-def _log(db: Session, level: str, source: str, message: str, job_id: Optional[str] = None):
-    db.add(LogEntry(level=level, source=source, message=message, job_id=job_id))
+def _log(db: Session, level: str, source: str, message: str, job_id: Optional[str] = None, org_id: str = None):
+    db.add(LogEntry(organization_id=org_id, level=level, source=source, message=message, job_id=job_id))
     db.commit()
     logger.log(getattr(logging, level.upper(), logging.INFO), f"[{source}] {message}")
     manager.broadcast_sync("log", {
         "timestamp": utcnow().isoformat(),
         "level": level, "source": source, "message": message, "jobId": job_id,
-    })
+    }, org_id=org_id)
 
 
 def _broadcast_run(run: IngestionRun):
@@ -197,7 +197,7 @@ def _broadcast_run(run: IngestionRun):
         "errorMessage": run.error_message,
         "startedAt": run.started_at.isoformat() if run.started_at else None,
         "completedAt": run.completed_at.isoformat() if run.completed_at else None,
-    })
+    }, org_id=run.organization_id)
 
 
 def _broadcast_job(job: TranscriptionJob):
@@ -207,7 +207,7 @@ def _broadcast_job(job: TranscriptionJob):
         "errorMessage": job.error_message,
         "startedAt": job.started_at.isoformat() if job.started_at else None,
         "completedAt": job.completed_at.isoformat() if job.completed_at else None,
-    })
+    }, org_id=job.organization_id)
 
 
 @dataclass
@@ -217,6 +217,11 @@ class IngestionSettings:
     soniox: SonioxSettings
     llm: LlmSettings
     webhook: WebhookSettings
+    parser: FilenameParserSettings = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.parser is None:
+            self.parser = FilenameParserSettings()
 
 
 class IngestionStopped(Exception):
@@ -227,8 +232,9 @@ class IngestionStopped(Exception):
 
 class IngestionService:
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, org_id: str = None):
         self.db = db
+        self.org_id = org_id
         self._stop = threading.Event()
         os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -270,7 +276,8 @@ class IngestionService:
             self.db.commit()
             _broadcast_run(run)
             _log(self.db, "warn", "ingestion",
-                 f"Run {run.run_id} stopped. {run.processed_files}/{run.total_files} done.")
+                 f"Run {run.run_id} stopped. {run.processed_files}/{run.total_files} done.",
+                 org_id=self.org_id)
             return []
 
         except Exception as e:
@@ -280,7 +287,8 @@ class IngestionService:
             run.completed_at = utcnow()
             self.db.commit()
             _broadcast_run(run)
-            _log(self.db, "error", "ingestion", f"Run {run.run_id} failed: {e}")
+            _log(self.db, "error", "ingestion", f"Run {run.run_id} failed: {e}",
+                 org_id=self.org_id)
             raise
 
         finally:
@@ -291,7 +299,10 @@ class IngestionService:
 
     def _init_run(self, source: str, remote_path: Optional[str], resume_run_id: Optional[str]) -> IngestionRun:
         if resume_run_id:
-            run = self.db.query(IngestionRun).filter(IngestionRun.run_id == resume_run_id).first()
+            run = self.db.query(IngestionRun).filter(
+                IngestionRun.run_id == resume_run_id,
+                IngestionRun.organization_id == self.org_id,
+            ).first()
             if not run:
                 raise ValueError(f"Run {resume_run_id} not found")
             run.status = "processing"  # Skip download status on resume
@@ -301,10 +312,12 @@ class IngestionService:
             run.failed_files = 0
             self.db.commit()
             _broadcast_run(run)
-            _log(self.db, "info", "ingestion", f"Resuming run {run.run_id}...")
+            _log(self.db, "info", "ingestion", f"Resuming run {run.run_id}...",
+                 org_id=self.org_id)
             return run
 
         run = IngestionRun(
+            organization_id=self.org_id,
             run_id=f"RUN-{uuid.uuid4().hex[:8].upper()}",
             source=source, status="downloading",
             remote_path=remote_path, started_at=utcnow(),
@@ -312,25 +325,27 @@ class IngestionService:
         self.db.add(run)
         self.db.commit()
         _broadcast_run(run)
-        _log(self.db, "info", "ingestion", f"Starting run {run.run_id} from {source}...")
+        _log(self.db, "info", "ingestion", f"Starting run {run.run_id} from {source}...",
+             org_id=self.org_id)
         return run
 
     def _load_settings(self) -> IngestionSettings:
         """Load all settings once."""
-        soniox = _get_setting(self.db, "soniox", SonioxSettings)
-        ctx = _get_setting(self.db, "call-context", CallContext)
-        vocab = _get_setting(self.db, "custom-vocabulary", CustomVocabulary)
+        soniox = _get_setting(self.db, "soniox", SonioxSettings, self.org_id)
+        ctx = _get_setting(self.db, "call-context", CallContext, self.org_id)
+        vocab = _get_setting(self.db, "custom-vocabulary", CustomVocabulary, self.org_id)
         if ctx.context:
             soniox.callContext = ctx.context
         if vocab.words:
             soniox.customVocabulary = vocab.words
 
         return IngestionSettings(
-            sftp=_get_setting(self.db, "sftp", SftpSettings),
-            s3=_get_setting(self.db, "s3", S3Settings),
+            sftp=_get_setting(self.db, "sftp", SftpSettings, self.org_id),
+            s3=_get_setting(self.db, "s3", S3Settings, self.org_id),
             soniox=soniox,
-            llm=_get_setting(self.db, "llm", LlmSettings),
-            webhook=_get_setting(self.db, "webhook", WebhookSettings),
+            llm=_get_setting(self.db, "llm", LlmSettings, self.org_id),
+            webhook=_get_setting(self.db, "webhook", WebhookSettings, self.org_id),
+            parser=_get_setting(self.db, "filename-parser", FilenameParserSettings, self.org_id),
         )
 
     def _finish_run(self, run: IngestionRun, created: list[str], total_files: int):
@@ -343,28 +358,38 @@ class IngestionService:
         _log(self.db, "info", "ingestion",
              f"Run {run.run_id} complete. "
              f"{len(created)} new, {max(0, skipped)} skipped, "
-             f"{run.failed_files} failed (total {total_files}).")
+             f"{run.failed_files} failed (total {total_files}).",
+             org_id=self.org_id)
 
     # ── Download phase ───────────────────────────────────────
 
-    async def _download_phase(self, run, settings, source, remote_path, is_resume=False) -> list[str]:
+    async def _download_phase(self, run, settings, source, remote_path, is_resume=False) -> list[tuple[str, str]]:
+        """
+        Download files. Returns list of (local_path, subdirectory_name) tuples.
+        subdirectory_name is "" when not using recursive traversal.
+        """
+        use_recursive = settings.parser.recursiveTraversal and source == "sftp"
+
         if is_resume:
-            # On resume: don't show download progress — just get the file list quickly.
-            # Files already exist locally (sftp_service skips existing).
             if source == "sftp":
                 svc = SFTPService(settings.sftp)
-                files = await asyncio.to_thread(svc.download_folder, TEMP_DIR, remote_path, None)
+                if use_recursive:
+                    files = await asyncio.to_thread(svc.download_folder_recursive, TEMP_DIR, remote_path, None)
+                else:
+                    flat = await asyncio.to_thread(svc.download_folder, TEMP_DIR, remote_path, None)
+                    files = [(f, "") for f in flat]
             else:
                 svc = S3Service(settings.s3)
-                files = await asyncio.to_thread(svc.list_files)
+                flat = await asyncio.to_thread(svc.list_files)
+                files = [(f, "") for f in flat]
             run.total_files = len(files)
             run.downloaded_files = len(files)
             self.db.commit()
             _broadcast_run(run)
-            _log(self.db, "info", "ingestion", f"Resume: {len(files)} files ready.")
+            _log(self.db, "info", "ingestion", f"Resume: {len(files)} files ready.",
+                 org_id=self.org_id)
             return files
 
-        # New run: show per-file download progress
         def on_progress(downloaded: int, total: int, filename: str):
             run.total_files = total
             run.downloaded_files = downloaded
@@ -376,28 +401,41 @@ class IngestionService:
 
         if source == "sftp":
             svc = SFTPService(settings.sftp)
-            files = await asyncio.to_thread(
-                svc.download_folder, TEMP_DIR, remote_path, on_progress
-            )
+            if use_recursive:
+                files = await asyncio.to_thread(
+                    svc.download_folder_recursive, TEMP_DIR, remote_path, on_progress
+                )
+            else:
+                flat = await asyncio.to_thread(
+                    svc.download_folder, TEMP_DIR, remote_path, on_progress
+                )
+                files = [(f, "") for f in flat]
         else:
             svc = S3Service(settings.s3)
-            files = await asyncio.to_thread(svc.list_files)
+            flat = await asyncio.to_thread(svc.list_files)
+            files = [(f, "") for f in flat]
             run.total_files = len(files)
             run.downloaded_files = len(files)
             self.db.commit()
             _broadcast_run(run)
 
-        _log(self.db, "info", "ingestion", f"Downloaded {len(files)} files.")
+        _log(self.db, "info", "ingestion", f"Downloaded {len(files)} files.",
+             org_id=self.org_id)
         return files
 
     # ── Process phase (parallel) ────────────────────────────
 
-    async def _process_phase(self, run, files, settings, source) -> list[str]:
-        """Process all files in parallel. Skips already-completed ones."""
+    async def _process_phase(self, run, files: list[tuple[str, str]], settings, source) -> list[str]:
+        """Process all files in parallel. Skips already-completed ones.
+        files is list of (local_path, subdirectory_name) tuples.
+        """
         from app.database import SessionLocal
 
+        # Auto-discover subdirectories and create DB entries
+        self._auto_discover_subdirectories(files)
+
         # Load settings
-        schedule = _get_setting(self.db, "ingest-schedule", IngestSchedule)
+        schedule = _get_setting(self.db, "ingest-schedule", IngestSchedule, self.org_id)
         concurrency = max(1, schedule.concurrency)
         min_duration = schedule.minDuration
 
@@ -406,21 +444,33 @@ class IngestionService:
         self.db.commit()
         _broadcast_run(run)
 
-        # Determine which files are already done
+        # Determine which files are already done (scoped to this org)
         completed_filenames = {
             j.file_name for j in
             self.db.query(TranscriptionJob.file_name)
-            .filter(TranscriptionJob.status == "completed")
+            .filter(
+                TranscriptionJob.organization_id == self.org_id,
+                TranscriptionJob.status == "completed",
+            )
             .all()
         }
 
-        pending = []
+        # Load subdirectory settings for filtering
+        from app.models.subdirectory import Subdirectory as SubdirModel
+        subdir_map = {
+            s.key: s for s in self.db.query(SubdirModel).filter(SubdirModel.organization_id == self.org_id).all()
+        }
+
+        pending: list[tuple[str, str]] = []
         skipped = 0
-        for file_path in files:
-            if os.path.basename(file_path) in completed_filenames:
+        for file_path, subdir in files:
+            fname = os.path.basename(file_path)
+            if fname in completed_filenames:
                 skipped += 1
+            elif subdir and subdir in subdir_map and not subdir_map[subdir].enabled:
+                skipped += 1  # subdirectory is disabled
             else:
-                pending.append(file_path)
+                pending.append((file_path, subdir))
 
         run.processed_files = skipped
         self.db.commit()
@@ -428,7 +478,8 @@ class IngestionService:
 
         if skipped > 0:
             _log(self.db, "info", "ingestion",
-                 f"{skipped} files already done, {len(pending)} remaining.")
+                 f"{skipped} files already done, {len(pending)} remaining.",
+                 org_id=self.org_id)
 
         # Load all enabled rules once (filtered per call by direction later)
         all_rules_data = [{
@@ -436,7 +487,10 @@ class IngestionService:
             "description": r.description, "max_score": r.max_score,
             "rule_type": r.rule_type, "is_critical": r.is_critical,
             "direction": r.direction, "call_types": r.call_types or [],
+            "subdirectories": r.subdirectories or [],
+            "metadata_conditions": r.metadata_conditions or [],
         } for r in self.db.query(QARule).filter(
+            QARule.organization_id == self.org_id,
             QARule.enabled == True
         ).order_by(QARule.sort_order).all()]
 
@@ -446,13 +500,15 @@ class IngestionService:
         failed_count = 0
         stopped = False
         semaphore = asyncio.Semaphore(concurrency)
-        _log(self.db, "info", "ingestion", f"Processing with concurrency={concurrency}")
+        _log(self.db, "info", "ingestion", f"Processing with concurrency={concurrency}",
+             org_id=self.org_id)
 
-        async def worker(file_path: str):
+        async def worker(file_info: tuple[str, str]):
             nonlocal failed_count, stopped
             if stopped:
                 return
 
+            file_path, subdir_name = file_info
             MAX_RETRIES = 3
 
             async with semaphore:
@@ -472,7 +528,9 @@ class IngestionService:
                     db = SessionLocal()
                     try:
                         call_id = await self._process_file_with_session(
-                            db, file_path, job_id, source, settings, run.run_id, all_rules_data, min_duration
+                            db, file_path, job_id, source, settings, run.run_id, all_rules_data, min_duration,
+                            subdirectory=subdir_name or None,
+                            org_id=self.org_id,
                         )
                         async with lock:
                             created_ids.append(call_id)
@@ -491,7 +549,8 @@ class IngestionService:
                         db.close()
                         if attempt < MAX_RETRIES:
                             _log(self.db, "warn", "ingestion",
-                                 f"Attempt {attempt}/{MAX_RETRIES} failed for {filename}: {e}. Retrying...", job_id)
+                                 f"Attempt {attempt}/{MAX_RETRIES} failed for {filename}: {e}. Retrying...", job_id,
+                                 org_id=self.org_id)
                             await asyncio.sleep(2 * attempt)  # backoff: 2s, 4s
                         continue
 
@@ -511,6 +570,7 @@ class IngestionService:
 
                         # Mark job failed
                         job = db.query(TranscriptionJob).filter(
+                            TranscriptionJob.organization_id == self.org_id,
                             TranscriptionJob.job_id == job_id).first()
                         if job and job.status != "completed":
                             job.status = "failed"
@@ -519,10 +579,11 @@ class IngestionService:
                             db.commit()
                             _broadcast_job(job)
 
-                        # Mark call as failed too
+                        # Mark call as failed too (scoped to this org)
                         from app.models.call import Call
                         failed_call = db.query(Call).filter(
-                            Call.audio_file_path == file_path
+                            Call.organization_id == self.org_id,
+                            Call.audio_file_path == file_path,
                         ).first()
                         if failed_call and failed_call.status == "processing":
                             failed_call.status = "failed"
@@ -531,16 +592,18 @@ class IngestionService:
                             db.commit()
 
                         _log(db, "error", "ingestion",
-                             f"Failed {filename} after {MAX_RETRIES} attempts: {last_error}", job_id)
+                             f"Failed {filename} after {MAX_RETRIES} attempts: {last_error}", job_id,
+                             org_id=self.org_id)
                     finally:
                         db.close()
 
                 done = skipped + len(created_ids) + failed_count
                 _log(self.db, "info", "ingestion",
-                     f"[{done}/{len(files)}] {filename}")
+                     f"[{done}/{len(files)}] {filename}",
+                     org_id=self.org_id)
 
         # Launch all workers
-        tasks = [asyncio.create_task(worker(fp)) for fp in pending]
+        tasks = [asyncio.create_task(worker(fi)) for fi in pending]
         await asyncio.gather(*tasks)
 
         if stopped:
@@ -550,18 +613,49 @@ class IngestionService:
         self.db.commit()
         return created_ids
 
+    def _auto_discover_subdirectories(self, files: list[tuple[str, str]]):
+        """Create DB entries for any new subdirectories found during download."""
+        from app.models.subdirectory import Subdirectory as SubdirModel
+        import re
+
+        existing_keys = {s.key for s in self.db.query(SubdirModel.key).filter(SubdirModel.organization_id == self.org_id).all()}
+        seen = set()
+        for _, subdir in files:
+            if not subdir or subdir in existing_keys or subdir in seen:
+                continue
+            seen.add(subdir)
+            # Guess direction from name
+            name_upper = subdir.upper()
+            if "OUTBOUND" in name_upper:
+                direction = "outbound"
+            elif "INBOUND" in name_upper:
+                direction = "inbound"
+            else:
+                direction = "unknown"
+            self.db.add(SubdirModel(
+                organization_id=self.org_id,
+                key=subdir, display_name=subdir, direction=direction,
+                discovered_from=subdir, enabled=True,
+            ))
+            _log(self.db, "info", "ingestion", f"Discovered subdirectory: {subdir} (direction={direction})",
+                 org_id=self.org_id)
+        if seen:
+            self.db.commit()
+
     # ── Single file pipeline (with own DB session) ────────────
 
     async def _process_file_with_session(
         self, db: Session, file_path: str, job_id: str,
         source: str, settings, run_id: str, rules_data: list[dict],
-        min_duration: int = 10,
+        min_duration: int = 10, subdirectory: str | None = None,
+        org_id: str = None,
     ) -> str:
         filename = os.path.basename(file_path)
-        log = lambda lvl, msg: _log(db, lvl, "ingestion", msg, job_id)
+        log = lambda lvl, msg: _log(db, lvl, "ingestion", msg, job_id, org_id=org_id)
 
         # 1. Create job record
         job = TranscriptionJob(
+            organization_id=org_id,
             job_id=job_id, file_name=filename, source=source,
             status="queued", started_at=utcnow(),
         )
@@ -592,7 +686,7 @@ class IngestionService:
         segments = await soniox.transcribe_file(
             local_path,
             stop_event=self._stop,
-            log_fn=lambda lvl, src, msg, jid: _log(db, lvl, src, msg, jid),
+            log_fn=lambda lvl, src, msg, jid: _log(db, lvl, src, msg, jid, org_id=org_id),
             job_id=job_id,
         )
 
@@ -602,27 +696,79 @@ class IngestionService:
         _broadcast_job(job)
         self._check_stopped()
 
-        # 4. Parse .info metadata + create call
-        meta = _parse_info_file(file_path)
-        transcript_duration = int(segments[-1]["timestamp"]) if segments else 0
-        duration = meta["duration"] if meta["duration"] > 0 else transcript_duration
+        # 4. Parse metadata — combine info file + filename regex + subdirectory rules
+        parser_settings = settings.parser
+        meta = {"agent_name": "Unknown", "agent_id": "AGT-000", "customer_phone": "Unknown",
+                "duration": 0, "direction": "unknown", "info_raw": ""}
 
-        # Parse actual call datetime from filename: ..._2026-03-29_14-50-44.au
+        # Step A: info file (if enabled)
+        if parser_settings.useInfoFiles:
+            meta = _parse_info_file(file_path)
+
+        # Step B: filename regex (fills in missing fields)
+        from app.services.filename_parser import parse_filename
+        parsed = parse_filename(parser_settings, filename)
+        log("info", f"Filename parser: pattern='{parser_settings.filenamePattern[:80]}...', filename='{filename}', parsed={parsed}")
+        if parsed.get("agent_name") and meta["agent_name"] == "Unknown":
+            meta["agent_name"] = parsed["agent_name"].replace("_", " ").strip()
+        if parsed.get("phone") and meta["customer_phone"] == "Unknown":
+            meta["customer_phone"] = parsed["phone"]
+        if parsed.get("agent_id") and meta["agent_id"] == "AGT-000":
+            meta["agent_id"] = f"AGT-{parsed['agent_id']}"
+
+        # Step C: subdirectory direction (if info file didn't provide one)
+        if meta["direction"] == "unknown" and subdirectory:
+            from app.models.subdirectory import Subdirectory as SubdirModel
+            subdir_rec = db.query(SubdirModel).filter(SubdirModel.key == subdirectory, SubdirModel.organization_id == org_id).first()
+            if subdir_rec and subdir_rec.direction != "unknown":
+                meta["direction"] = subdir_rec.direction
+
+        # Step D: duration fallback chain — try each source until we get a value
+        transcript_duration = int(segments[-1]["timestamp"]) if segments else 0
+        if meta["duration"] <= 0 and parser_settings.durationSource == "audio_probe":
+            from app.services.audio_utils import get_audio_duration
+            meta["duration"] = get_audio_duration(local_path)
+        if meta["duration"] <= 0 and parser_settings.durationSource == "transcription":
+            meta["duration"] = transcript_duration
+        # Final fallback: always try ffprobe then transcript if still 0
+        if meta["duration"] <= 0:
+            from app.services.audio_utils import get_audio_duration
+            meta["duration"] = get_audio_duration(local_path)
+        if meta["duration"] <= 0:
+            meta["duration"] = transcript_duration
+        duration = meta["duration"]
+
+        # Step E: parse datetime from filename regex or fallback patterns
         import re as _re
+        from datetime import datetime as _dt
         call_dt = utcnow()
-        dt_match = _re.search(r'(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})\.\w+$', os.path.basename(file_path))
-        if dt_match:
+        if parsed.get("date"):
             try:
-                from datetime import datetime as _dt
-                call_dt = _dt.strptime(
-                    f"{dt_match.group(1)} {dt_match.group(2).replace('-', ':')}",
-                    "%Y-%m-%d %H:%M:%S"
-                ).replace(tzinfo=APP_TZ)
+                date_str = parsed["date"]
+                time_str = parsed.get("time", "000000")
+                # Normalize time: "14-50-44" or "145044" or "14:50:44"
+                time_clean = time_str.replace("-", "").replace(":", "")
+                if len(time_clean) == 6:
+                    call_dt = _dt.strptime(f"{date_str} {time_clean}", "%Y-%m-%d %H%M%S").replace(tzinfo=APP_TZ)
             except ValueError:
                 pass
+        if call_dt == utcnow():
+            # Fallback: try old pattern ..._2026-03-29_14-50-44.au
+            dt_match = _re.search(r'(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})\.\w+$', filename)
+            if dt_match:
+                try:
+                    call_dt = _dt.strptime(
+                        f"{dt_match.group(1)} {dt_match.group(2).replace('-', ':')}",
+                        "%Y-%m-%d %H:%M:%S"
+                    ).replace(tzinfo=APP_TZ)
+                except ValueError:
+                    pass
 
-        # Check if this file was already processed — if so, delete old call and rewrite
-        existing = db.query(Call).filter(Call.audio_file_path == file_path).first()
+        # Check if this file was already processed — if so, delete old call and rewrite (scoped per org)
+        existing = db.query(Call).filter(
+            Call.organization_id == org_id,
+            Call.audio_file_path == file_path,
+        ).first()
         if existing:
             log("info", f"Rewriting existing call {existing.call_id} for {filename}")
             reuse_call_id = existing.call_id
@@ -632,9 +778,10 @@ class IngestionService:
             reuse_call_id = None
 
         if not reuse_call_id:
-            from sqlalchemy import text as sa_text
-            next_num = db.execute(sa_text("SELECT nextval('call_id_seq')")).scalar()
+            from app.services.call_counter_service import get_next_call_num
+            next_num = get_next_call_num(db, org_id)
         call = Call(
+            organization_id=org_id,
             call_id=reuse_call_id or f"CALL-{next_num}",
             date_time=call_dt,
             processed_at=utcnow(),
@@ -643,13 +790,15 @@ class IngestionService:
             customer_phone=meta["customer_phone"],
             duration=duration,
             direction=meta["direction"],
+            subdirectory=subdirectory,
             status="processing",
             audio_file_path=file_path,
             ingestion_run_id=run_id,
-            raw_json={"info_file": meta.get("info_raw", "")},
+            raw_json={"info_file": meta.get("info_raw", ""), "parsed_filename": parsed},
+            call_metadata=parsed,
         )
         if meta["agent_name"] != "Unknown":
-            log("info", f"Metadata: agent={meta['agent_name']}, phone={meta['customer_phone']}, duration={duration}s, direction={meta['direction']}")
+            log("info", f"Metadata: agent={meta['agent_name']}, phone={meta['customer_phone']}, duration={duration}s, direction={meta['direction']}, subdir={subdirectory}")
         db.add(call)
         db.commit()
 
@@ -672,12 +821,12 @@ class IngestionService:
         else:
             # 5b. Classify call type
             from app.models.call_type import CallType as CallTypeModel
-            active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).order_by(CallTypeModel.sort_order).all()
+            active_types = db.query(CallTypeModel).filter(CallTypeModel.organization_id == org_id, CallTypeModel.enabled == True).order_by(CallTypeModel.sort_order).all()
             types_data = [{"key": ct.key, "name": ct.name, "description": ct.description} for ct in active_types]
 
             if types_data:
                 llm_cls = LLMService(settings.llm)
-                cls_settings = _get_setting(db, "classification", ClassificationSettings)
+                cls_settings = _get_setting(db, "classification", ClassificationSettings, org_id=org_id)
                 classified_type, cls_debug = await llm_cls.classify_call(segments, types_data, agent_name=call.agent_name, classification_settings=cls_settings)
                 call.call_type = classified_type
                 from sqlalchemy.orm.attributes import flag_modified
@@ -690,12 +839,15 @@ class IngestionService:
             else:
                 call.call_type = None
 
-            # 5c. LLM analysis — filter rules by call direction + call type
+            # 5c. LLM analysis — filter rules by call direction + call type + subdirectory + metadata
+            from app.services.filename_parser import check_metadata_conditions
             call_dir = call.direction or "unknown"
             filtered_rules = [
                 r for r in rules_data
                 if (r["direction"] == "both" or r["direction"] == call_dir)
                 and (not r.get("call_types") or call.call_type in r.get("call_types", []))
+                and (not r.get("subdirectories") or (call.subdirectory and call.subdirectory in r.get("subdirectories", [])))
+                and check_metadata_conditions(r.get("metadata_conditions", []), call.call_metadata or {})
             ]
             log("info", f"Analyzing {call.call_id} ({call_dir}, {call.call_type}), {len(filtered_rules)}/{len(rules_data)} rules...")
             job.progress = 70
@@ -706,7 +858,7 @@ class IngestionService:
             analysis = await llm.analyze_call(
                 segments, filtered_rules,
                 agent_name=call.agent_name,
-                log_fn=lambda lvl, src, msg, jid: _log(db, lvl, src, msg, jid),
+                log_fn=lambda lvl, src, msg, jid: _log(db, lvl, src, msg, jid, org_id=org_id),
                 job_id=job_id,
             )
 

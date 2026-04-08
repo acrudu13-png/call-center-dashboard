@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import engine, Base
-from app.routers import calls, rules, logs, settings as settings_router, analyze, ingestion, auth, call_types
+from app.routers import calls, rules, logs, settings as settings_router, analyze, ingestion, auth, call_types, subdirectories
+from app.routers.organizations import router as organizations_router, admin_router
 from app.ws_manager import manager
 
 logging.basicConfig(
@@ -16,22 +17,39 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _sync_call_id_sequence():
-    """Create call_id_seq and sync it with the highest existing CALL-XXXX number."""
+def _ensure_call_counters():
+    """Ensure every organization has a call_counter row.
+    The migration backfills existing orgs; this is a safety net for orgs created
+    via paths that bypass the API. Counters are atomic per-org via UPDATE...RETURNING
+    so call IDs never collide between tenants."""
     from sqlalchemy import text
     from app.database import SessionLocal
 
     db = SessionLocal()
     try:
-        db.execute(text("CREATE SEQUENCE IF NOT EXISTS call_id_seq"))
-        max_num = db.execute(text(
-            "SELECT COALESCE(MAX(CAST(REPLACE(call_id, 'CALL-', '') AS INTEGER)), 999) FROM calls"
-        )).scalar()
-        db.execute(text(f"SELECT setval('call_id_seq', {max_num})"))
+        result = db.execute(text("""
+            INSERT INTO call_counters (organization_id, last_call_num)
+            SELECT
+                o.id,
+                COALESCE(
+                    (
+                        SELECT MAX(CAST(REPLACE(c.call_id, 'CALL-', '') AS INTEGER))
+                        FROM calls c
+                        WHERE c.organization_id = o.id
+                          AND c.call_id LIKE 'CALL-%'
+                          AND c.call_id ~ '^CALL-[0-9]+$'
+                    ),
+                    999
+                )
+            FROM organizations o
+            ON CONFLICT (organization_id) DO NOTHING
+            RETURNING organization_id
+        """)).fetchall()
         db.commit()
-        logger.info(f"call_id_seq synced to {max_num}")
+        if result:
+            logger.info(f"Bootstrapped call counters for {len(result)} organization(s)")
     except Exception as e:
-        logger.warning(f"Failed to sync call_id_seq: {e}")
+        logger.warning(f"Failed to ensure call counters: {e}")
         db.rollback()
     finally:
         db.close()
@@ -62,7 +80,7 @@ def _cleanup_orphaned_runs():
 
 
 def _ensure_admin():
-    """Create or update the default admin user from env vars."""
+    """Create or update the default superadmin user from env vars."""
     import os
     from app.database import SessionLocal
     from app.models.user import User
@@ -74,23 +92,35 @@ def _ensure_admin():
 
     db = SessionLocal()
     try:
-        admin = db.query(User).filter(User.username == username).first()
+        # Find by username (superadmin has organization_id=NULL)
+        admin = db.query(User).filter(
+            User.username == username,
+            User.organization_id.is_(None),
+        ).first()
         if not admin:
             admin = User(
+                organization_id=None,
                 username=username,
                 email=email,
                 hashed_password=hash_password(password),
                 full_name="System Administrator",
-                role="admin",
+                role="superadmin",
             )
             db.add(admin)
             db.commit()
-            logger.info(f"Admin user created: {username}")
-        elif not verify_password(password, admin.hashed_password):
-            admin.hashed_password = hash_password(password)
-            admin.email = email
-            db.commit()
-            logger.info(f"Admin password synced from env")
+            logger.info(f"Superadmin user created: {username}")
+        else:
+            updated = False
+            if admin.role != "superadmin":
+                admin.role = "superadmin"
+                updated = True
+            if not verify_password(password, admin.hashed_password):
+                admin.hashed_password = hash_password(password)
+                admin.email = email
+                updated = True
+            if updated:
+                db.commit()
+                logger.info(f"Superadmin synced from env")
     finally:
         db.close()
 
@@ -101,8 +131,8 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables verified.")
 
-    # Ensure call_id sequence exists and is synced with existing data
-    _sync_call_id_sequence()
+    # Ensure every org has a per-org call counter row
+    _ensure_call_counters()
 
     # Cleanup runs that were in-progress when the server last stopped
     _cleanup_orphaned_runs()
@@ -142,6 +172,8 @@ app.add_middleware(
 
 # Routers
 app.include_router(auth.router)
+app.include_router(organizations_router)
+app.include_router(admin_router)
 app.include_router(calls.router)
 app.include_router(calls.audio_router)
 app.include_router(rules.router)
@@ -150,6 +182,7 @@ app.include_router(settings_router.router)
 app.include_router(analyze.router)
 app.include_router(ingestion.router)
 app.include_router(call_types.router)
+app.include_router(subdirectories.router)
 
 
 @app.get("/api/health")
@@ -158,8 +191,38 @@ def health_check():
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
+    """WebSocket endpoint. Authenticates via ?token=<jwt> query param.
+    Connections are scoped per organization; superadmin clients see all events."""
+    from app.auth import decode_token
+    from app.database import SessionLocal
+    from app.models.user import User
+
+    org_id: str | None = None
+    if token:
+        try:
+            payload = decode_token(token)
+            if payload.get("type") == "access":
+                user_id = payload.get("sub")
+                db = SessionLocal()
+                try:
+                    user = db.query(User).filter(User.id == user_id).first()
+                    if user and user.is_active:
+                        # Superadmin → key="*" (sees all events)
+                        # Others → their organization_id
+                        org_id = user.organization_id if user.role != "superadmin" else None
+                finally:
+                    db.close()
+        except Exception as e:
+            logger.warning(f"WS auth failed: {e}")
+            await websocket.close(code=1008)
+            return
+    else:
+        # No token → reject
+        await websocket.close(code=1008)
+        return
+
+    await manager.connect(websocket, org_id)
     try:
         while True:
             # Keep connection alive; ignore client messages

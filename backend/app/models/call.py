@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON
+    String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base, utcnow
@@ -9,9 +9,15 @@ from app.database import Base, utcnow
 
 class Call(Base):
     __tablename__ = "calls"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "call_id", name="uq_calls_org_call_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    call_id: Mapped[str] = mapped_column(String(20), unique=True, index=True)  # CALL-1000 etc.
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    call_id: Mapped[str] = mapped_column(String(20), index=True)  # CALL-1000 etc.
     date_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     agent_name: Mapped[str] = mapped_column(String(120))
     agent_id: Mapped[str] = mapped_column(String(20), index=True)
@@ -25,6 +31,8 @@ class Call(Base):
     compliance_pass: Mapped[bool] = mapped_column(Boolean, default=True)
     direction: Mapped[str] = mapped_column(String(10), default="unknown", index=True)  # inbound | outbound | unknown
     call_type: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)  # FK key to call_types
+    subdirectory: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)  # source subdirectory
+    call_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)  # extracted fields from filename parser
     is_eligible: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     ineligible_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     audio_file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -49,6 +57,7 @@ class Call(Base):
     )
 
     # Relationships
+    organization: Mapped["Organization"] = relationship(back_populates="calls")  # noqa: F821
     transcript_lines: Mapped[list["TranscriptLine"]] = relationship(
         back_populates="call", cascade="all, delete-orphan", order_by="TranscriptLine.timestamp"
     )

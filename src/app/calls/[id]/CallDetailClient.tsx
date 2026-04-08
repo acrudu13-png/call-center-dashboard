@@ -544,6 +544,22 @@ export default function CallDetailClient({
             </CardContent>
           </Card>
 
+          {call.metadata && Object.keys(call.metadata).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Metadata</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {Object.entries(call.metadata).map(([key, value]) => (
+                  <div key={key} className="flex justify-between items-center">
+                    <span className="text-muted-foreground text-sm">{key}</span>
+                    <span className="font-medium text-sm font-mono">{String(value)}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           {call.hasCriticalFailure && (
             <Card className="border-destructive">
               <CardHeader>

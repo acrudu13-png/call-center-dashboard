@@ -112,6 +112,8 @@ export async function saveQARule(rule: {
   isCritical?: boolean;
   direction?: string;
   callTypes?: string[];
+  subdirectories?: string[];
+  metadataConditions?: { field: string; operator: string; value: string }[];
 }) {
   if (rule.id) {
     await updateRule(rule.id, {
@@ -122,6 +124,8 @@ export async function saveQARule(rule: {
       enabled: rule.enabled,
       is_critical: rule.isCritical || false,
       call_types: rule.callTypes || [],
+      subdirectories: rule.subdirectories || [],
+      metadata_conditions: rule.metadataConditions || [],
       direction: rule.direction || "both",
     });
     return { success: true, message: "Rule saved successfully.", id: rule.id };
@@ -138,6 +142,8 @@ export async function saveQARule(rule: {
       is_critical: rule.isCritical || false,
       direction: rule.direction || "both",
       call_types: rule.callTypes || [],
+      subdirectories: rule.subdirectories || [],
+      metadata_conditions: rule.metadataConditions || [],
     });
     return { success: true, message: "Rule saved successfully.", id };
   }
@@ -202,6 +208,19 @@ export async function saveCallType(data: {
 export async function removeCallType(key: string) {
   await apiDeleteCallType(key);
   return { success: true, message: "Call type deleted successfully." };
+}
+
+export async function saveFilenameParser(data: {
+  filenamePattern: string;
+  variables: { name: string; label: string }[];
+  sampleFilenames: string[];
+  useInfoFiles: boolean;
+  recursiveTraversal: boolean;
+  audioExtensions: string[];
+  durationSource: string;
+}) {
+  await saveSetting("filename-parser", data);
+  return { success: true, message: "Filename parser settings saved successfully." };
 }
 
 export async function triggerManualIngestionCheck(remotePath: string) {
