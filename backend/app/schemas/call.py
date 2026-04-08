@@ -36,6 +36,8 @@ class CallSummary(BaseModel):
     compliancePass: bool
     direction: str = "unknown"
     callType: Optional[str] = None
+    subdirectory: Optional[str] = None
+    metadata: dict = {}
     isEligible: bool = True
     ineligibleReason: Optional[str] = None
 

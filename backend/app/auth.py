@@ -10,7 +10,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 
 from app.database import get_db
 from app.models.user import User
@@ -39,11 +39,12 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 # ── JWT tokens ────────────────────────────────────────
 
-def create_access_token(user_id: str, role: str) -> str:
+def create_access_token(user_id: str, role: str, organization_id: Optional[str] = None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": user_id,
         "role": role,
+        "org_id": organization_id,
         "type": "access",
         "exp": expire,
     }
@@ -102,8 +103,11 @@ def get_current_user(
 
 
 def require_role(*roles: str):
-    """Dependency factory: require user to have one of the listed roles."""
+    """Dependency factory: require user to have one of the listed roles.
+    Superadmin always passes any role check."""
     def _check(user: User = Depends(get_current_user)) -> User:
+        if user.role == "superadmin":
+            return user
         if user.role not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -113,11 +117,23 @@ def require_role(*roles: str):
     return _check
 
 
+def require_superadmin():
+    """Dependency: only superadmin can access."""
+    def _check(user: User = Depends(get_current_user)) -> User:
+        if user.role != "superadmin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Superadmin access required",
+            )
+        return user
+    return _check
+
+
 def require_page(*page_keys: str):
     """Dependency factory: require user to have access to at least one of the listed pages."""
     def _check(user: User = Depends(get_current_user)) -> User:
-        if user.role == "admin":
-            return user  # admin always has access
+        if user.role in ("superadmin", "org_admin"):
+            return user  # superadmin and org_admin always have access
         if not user.allowed_pages:
             return user  # empty = all pages
         if any(k in user.allowed_pages for k in page_keys):
@@ -127,3 +143,22 @@ def require_page(*page_keys: str):
             detail="Access denied",
         )
     return _check
+
+
+def scope_query(query: Query, model, user: User) -> Query:
+    """Filter a SQLAlchemy query by the user's organization.
+    Superadmin sees all data (no filter applied)."""
+    if user.role == "superadmin":
+        return query
+    return query.filter(model.organization_id == user.organization_id)
+
+
+def get_org_id(user: User) -> str:
+    """Extract organization_id from user. Raises 400 if superadmin
+    tries to access org-scoped data without specifying an org."""
+    if user.organization_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Superadmin must specify an organization for this operation",
+        )
+    return user.organization_id

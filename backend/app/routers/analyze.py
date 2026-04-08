@@ -12,19 +12,19 @@ from app.schemas.call import AnalyzeRequest, AnalyzeResponse
 from app.schemas.setting import LlmSettings, MainPrompt, ClassificationSettings
 from app.services.llm_service import LLMService
 from app.services.settings_service import get_setting as _get_setting
-from app.auth import get_current_user, require_role, require_page
+from app.auth import get_current_user, require_role, require_page, scope_query, get_org_id
 from app.ws_manager import manager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/analyze", tags=["analysis"], dependencies=[Depends(require_role("admin", "manager")), Depends(require_page("calls"))])
+router = APIRouter(prefix="/api/analyze", tags=["analysis"], dependencies=[Depends(require_role("org_admin", "manager")), Depends(require_page("calls"))])
 
 # Stop signal for bulk reanalysis
 _bulk_stop_event = asyncio.Event()
 
 
-def _add_log(db, level: str, message: str):
-    entry = LogEntry(timestamp=utcnow(), level=level, source="analysis", message=message)
+def _add_log(db, level: str, message: str, org_id: str = None):
+    entry = LogEntry(organization_id=org_id, timestamp=utcnow(), level=level, source="analysis", message=message)
     db.add(entry)
     db.commit()
     db.refresh(entry)
@@ -32,9 +32,10 @@ def _add_log(db, level: str, message: str):
 
 
 @router.post("", response_model=AnalyzeResponse)
-async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
+async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Run LLM-based QA analysis on a call."""
-    llm_settings = _get_setting(db, "llm", LlmSettings)
+    org_id = get_org_id(current_user)
+    llm_settings = _get_setting(db, "llm", LlmSettings, org_id=org_id)
     if not llm_settings.openRouterApiKey:
         raise HTTPException(status_code=400, detail="OpenRouter API key not configured")
 
@@ -51,10 +52,11 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
 
     llm = LLMService(llm_settings)
 
-    # Resolve call
-    call = db.query(Call).filter(
-        (Call.id == payload.callId) | (Call.call_id == payload.callId)
-    ).first()
+    # Resolve call (scoped per org)
+    q = db.query(Call).filter((Call.id == payload.callId) | (Call.call_id == payload.callId))
+    if current_user.role != "superadmin":
+        q = q.filter(Call.organization_id == org_id)
+    call = q.first()
     call_label = call.call_id if call else payload.callId
 
     # Prevent concurrent reanalysis of the same call (skip check for dry runs)
@@ -68,11 +70,11 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         db.commit()
 
     # Log start
-    _add_log(db, "info", f"Reanalysis started for {call_label}")
+    _add_log(db, "info", f"Reanalysis started for {call_label}", org_id=org_id)
     await manager.broadcast("log", {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Reanalysis started for {call_label}",
-    })
+    }, org_id=org_id)
 
     # Get transcript
     if payload.transcript:
@@ -89,7 +91,7 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
 
     # Get rules — filter by call direction
     call_dir = call.direction if call else "unknown"
-    rules_query = db.query(QARule).filter(QARule.enabled == True)
+    rules_query = db.query(QARule).filter(QARule.enabled == True).filter(QARule.organization_id == org_id)
     if payload.ruleIds:
         rules_query = rules_query.filter(QARule.rule_id.in_(payload.ruleIds))
     rules = rules_query.order_by(QARule.sort_order).all()
@@ -97,10 +99,10 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
     # Classify call type
     from app.models.call_type import CallType as CallTypeModel
     call_type_key = None
-    active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).order_by(CallTypeModel.sort_order).all()
+    active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).filter(CallTypeModel.organization_id == org_id).order_by(CallTypeModel.sort_order).all()
     types_data = [{"key": ct.key, "name": ct.name, "description": ct.description} for ct in active_types]
     if types_data and call:
-        cls_settings = _get_setting(db, "classification", ClassificationSettings)
+        cls_settings = _get_setting(db, "classification", ClassificationSettings, org_id=org_id)
         call_type_key, cls_debug = await llm.classify_call(transcript, types_data, agent_name=call.agent_name, classification_settings=cls_settings)
         call.call_type = call_type_key
         from sqlalchemy.orm.attributes import flag_modified
@@ -109,11 +111,16 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         call.raw_json = rj
         flag_modified(call, "raw_json")
         db.commit()
-        _add_log(db, "info", f"Classified {call_label} as: {call_type_key}")
+        _add_log(db, "info", f"Classified {call_label} as: {call_type_key}", org_id=org_id)
 
-    # Filter by direction and call type
+    # Filter by direction, call type, subdirectory, and metadata conditions
+    from app.services.filename_parser import check_metadata_conditions
+    call_subdir = call.subdirectory if call else None
+    call_meta = call.call_metadata or {} if call else {}
     rules = [r for r in rules if r.direction == "both" or r.direction == call_dir]
     rules = [r for r in rules if not r.call_types or (call_type_key and call_type_key in r.call_types)]
+    rules = [r for r in rules if not r.subdirectories or (call_subdir and call_subdir in r.subdirectories)]
+    rules = [r for r in rules if check_metadata_conditions(r.metadata_conditions or [], call_meta)]
 
     rules_data = [
         {
@@ -123,14 +130,14 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         for r in rules
     ]
 
-    _add_log(db, "info", f"Sending {call_label} ({call_dir}, {call_type_key}) to AI with {len(rules)} rules")
+    _add_log(db, "info", f"Sending {call_label} ({call_dir}, {call_type_key}) to AI with {len(rules)} rules", org_id=org_id)
     await manager.broadcast("log", {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Sending {call_label} to AI with {len(rules)} rules",
-    })
+    }, org_id=org_id)
 
     # Get prompt
-    main_prompt_setting = _get_setting(db, "main_prompt", MainPrompt)
+    main_prompt_setting = _get_setting(db, "main_prompt", MainPrompt, org_id=org_id)
     prompt = payload.mainPrompt or main_prompt_setting.prompt or None
 
     # Run analysis
@@ -146,11 +153,11 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
         if call and not payload.dryRun:
             call.status = "failed"
             db.commit()
-        _add_log(db, "error", f"Reanalysis failed for {call_label}: {e}")
+        _add_log(db, "error", f"Reanalysis failed for {call_label}: {e}", org_id=org_id)
         await manager.broadcast("log", {
             "timestamp": utcnow().isoformat(), "level": "error",
             "source": "analysis", "message": f"Reanalysis failed for {call_label}: {e}",
-        })
+        }, org_id=org_id)
         raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
 
     # Save results to the call record (skip for dry runs / test mode)
@@ -187,11 +194,11 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db)):
             ))
         db.commit()
 
-        _add_log(db, "info", f"Reanalysis complete for {call_label}: {result.grade} ({round(result.overallScore, 1)}%)")
+        _add_log(db, "info", f"Reanalysis complete for {call_label}: {result.grade} ({round(result.overallScore, 1)}%)", org_id=org_id)
         await manager.broadcast("log", {
             "timestamp": utcnow().isoformat(), "level": "info",
             "source": "analysis", "message": f"Reanalysis complete for {call_label}: {result.grade} ({round(result.overallScore, 1)}%)",
-        })
+        }, org_id=org_id)
 
     return result
 
@@ -207,10 +214,13 @@ async def bulk_reanalyze(
     direction: Optional[str] = None,
     callType: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Queue bulk reanalysis for all matching calls. Runs in background."""
     from fastapi import BackgroundTasks
+    org_id = get_org_id(current_user)
     query = db.query(Call).filter(Call.status.notin_(["processing", "reanalyzing"]))
+    query = query.filter(Call.organization_id == org_id)
 
     if status:
         query = query.filter(Call.status == status)
@@ -246,37 +256,38 @@ async def bulk_reanalyze(
         c.status = "reanalyzing"
     db.commit()
 
-    _add_log(db, "info", f"Bulk reanalysis started for {total} calls")
+    _add_log(db, "info", f"Bulk reanalysis started for {total} calls", org_id=org_id)
     await manager.broadcast("log", {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Bulk reanalysis started for {total} calls",
-    })
-    await manager.broadcast("bulk_reanalyze_started", {"callIds": call_ids, "total": total})
+    }, org_id=org_id)
+    await manager.broadcast("bulk_reanalyze_started", {"callIds": call_ids, "total": total}, org_id=org_id)
 
     # Run in background
     _bulk_stop_event.clear()
-    asyncio.create_task(_bulk_reanalyze_bg(call_ids))
+    asyncio.create_task(_bulk_reanalyze_bg(call_ids, org_id))
 
     return {"message": f"Bulk reanalysis queued for {total} calls", "total": total}
 
 
 @router.post("/bulk/stop")
-async def stop_bulk_reanalyze(db: Session = Depends(get_db)):
+async def stop_bulk_reanalyze(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Stop ongoing bulk reanalysis and reset remaining calls."""
+    org_id = get_org_id(current_user)
     _bulk_stop_event.set()
 
     # Reset any calls still in "reanalyzing" status back to their previous state
-    stuck = db.query(Call).filter(Call.status == "reanalyzing").all()
+    stuck = db.query(Call).filter(Call.status == "reanalyzing").filter(Call.organization_id == org_id).all()
     for c in stuck:
         c.status = "completed"
     db.commit()
 
-    _add_log(db, "info", f"Bulk reanalysis stopped. Reset {len(stuck)} calls.")
+    _add_log(db, "info", f"Bulk reanalysis stopped. Reset {len(stuck)} calls.", org_id=org_id)
     await manager.broadcast("log", {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Bulk reanalysis stopped. Reset {len(stuck)} calls.",
-    })
-    await manager.broadcast("bulk_reanalyze_done", {"total": 0, "stopped": True})
+    }, org_id=org_id)
+    await manager.broadcast("bulk_reanalyze_done", {"total": 0, "stopped": True}, org_id=org_id)
 
     return {"message": f"Stopped. Reset {len(stuck)} calls.", "reset": len(stuck)}
 
@@ -292,9 +303,12 @@ async def bulk_reclassify(
     direction: Optional[str] = None,
     callType: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Bulk reclassify call types only (no QA rules analysis)."""
+    org_id = get_org_id(current_user)
     query = db.query(Call).filter(Call.status.notin_(["processing", "reanalyzing"]))
+    query = query.filter(Call.organization_id == org_id)
 
     if status:
         query = query.filter(Call.status == status)
@@ -330,20 +344,20 @@ async def bulk_reclassify(
         c.status = "reanalyzing"
     db.commit()
 
-    _add_log(db, "info", f"Bulk reclassification started for {total} calls")
+    _add_log(db, "info", f"Bulk reclassification started for {total} calls", org_id=org_id)
     await manager.broadcast("log", {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Bulk reclassification started for {total} calls",
-    })
-    await manager.broadcast("bulk_reanalyze_started", {"callIds": call_ids, "total": total})
+    }, org_id=org_id)
+    await manager.broadcast("bulk_reanalyze_started", {"callIds": call_ids, "total": total}, org_id=org_id)
 
     _bulk_stop_event.clear()
-    asyncio.create_task(_bulk_reclassify_bg(call_ids))
+    asyncio.create_task(_bulk_reclassify_bg(call_ids, org_id))
 
     return {"message": f"Bulk reclassification queued for {total} calls", "total": total}
 
 
-async def _bulk_reclassify_bg(call_ids: list[str]):
+async def _bulk_reclassify_bg(call_ids: list[str], org_id: str = None):
     """Background task to reclassify call types only (no rules analysis)."""
     import asyncio
     from app.database import SessionLocal
@@ -365,11 +379,11 @@ async def _bulk_reclassify_bg(call_ids: list[str]):
                 return
             db = SessionLocal()
             try:
-                call = db.query(Call).filter(Call.id == call_id).first()
+                call = db.query(Call).filter(Call.id == call_id, Call.organization_id == org_id).first()
                 if not call or call.status != "reanalyzing":
                     return
 
-                llm_settings = get_setting(db, "llm", LlmSettings)
+                llm_settings = get_setting(db, "llm", LlmSettings, org_id=org_id)
                 if not llm_settings.openRouterApiKey:
                     return
 
@@ -383,7 +397,7 @@ async def _bulk_reclassify_bg(call_ids: list[str]):
                     db.commit()
                     return
 
-                active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).order_by(CallTypeModel.sort_order).all()
+                active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).filter(CallTypeModel.organization_id == org_id).order_by(CallTypeModel.sort_order).all()
                 types_data = [{"key": ct.key, "name": ct.name, "description": ct.description} for ct in active_types]
 
                 if not types_data:
@@ -393,7 +407,7 @@ async def _bulk_reclassify_bg(call_ids: list[str]):
                     return
 
                 llm = LLMService(llm_settings)
-                cls_s = get_setting(db, "classification", ClsSettings)
+                cls_s = get_setting(db, "classification", ClsSettings, org_id=org_id)
                 call_type_key, cls_debug = await llm.classify_call(
                     transcript, types_data,
                     agent_name=call.agent_name,
@@ -420,7 +434,7 @@ async def _bulk_reclassify_bg(call_ids: list[str]):
                     "callType": call.call_type,
                     "index": idx,
                     "total": len(call_ids),
-                })
+                }, org_id=org_id)
 
             except Exception as e:
                 logger.error(f"Bulk reclassification failed for {call_id}: {e}")
@@ -440,7 +454,7 @@ async def _bulk_reclassify_bg(call_ids: list[str]):
                 await manager.broadcast("call_updated", {
                     "callId": call_id, "status": "completed",
                     "index": idx, "total": len(call_ids),
-                })
+                }, org_id=org_id)
             finally:
                 db.close()
 
@@ -449,11 +463,11 @@ async def _bulk_reclassify_bg(call_ids: list[str]):
     await manager.broadcast("log", {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Bulk reclassification complete: {len(call_ids)} calls",
-    })
-    await manager.broadcast("bulk_reanalyze_done", {"total": len(call_ids)})
+    }, org_id=org_id)
+    await manager.broadcast("bulk_reanalyze_done", {"total": len(call_ids)}, org_id=org_id)
 
 
-async def _bulk_reanalyze_bg(call_ids: list[str]):
+async def _bulk_reanalyze_bg(call_ids: list[str], org_id: str = None):
     """Background task to reanalyze calls in parallel."""
     import asyncio
     from app.database import SessionLocal
@@ -465,7 +479,7 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
     # Read concurrency from ingestion settings (same pool)
     db_init = SessionLocal()
     try:
-        schedule = get_setting(db_init, "ingest-schedule", IngestSchedule)
+        schedule = get_setting(db_init, "ingest-schedule", IngestSchedule, org_id=org_id)
         concurrency = max(1, schedule.concurrency)
     except Exception:
         concurrency = 5
@@ -485,11 +499,11 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
                 return
             db = SessionLocal()
             try:
-                call = db.query(Call).filter(Call.id == call_id).first()
+                call = db.query(Call).filter(Call.id == call_id, Call.organization_id == org_id).first()
                 if not call or call.status != "reanalyzing":
                     return
 
-                llm_settings = get_setting(db, "llm", LlmSettings)
+                llm_settings = get_setting(db, "llm", LlmSettings, org_id=org_id)
                 if not llm_settings.openRouterApiKey:
                     return
 
@@ -504,13 +518,13 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
 
                 # Classify call type
                 call_type_key = None
-                active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).order_by(CallTypeModel.sort_order).all()
+                active_types = db.query(CallTypeModel).filter(CallTypeModel.enabled == True).filter(CallTypeModel.organization_id == org_id).order_by(CallTypeModel.sort_order).all()
                 types_data = [{"key": ct.key, "name": ct.name, "description": ct.description} for ct in active_types]
 
                 llm = LLMService(llm_settings)
 
                 if types_data:
-                    cls_s = get_setting(db, "classification", ClsSettings)
+                    cls_s = get_setting(db, "classification", ClsSettings, org_id=org_id)
                     call_type_key, cls_debug = await llm.classify_call(transcript, types_data, agent_name=call.agent_name, classification_settings=cls_s)
                     call.call_type = call_type_key
                     rj = dict(call.raw_json or {})
@@ -518,9 +532,14 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
                     call.raw_json = rj
                     flag_modified(call, "raw_json")
 
-                rules = db.query(QARule).filter(QARule.enabled == True).order_by(QARule.sort_order).all()
+                from app.services.filename_parser import check_metadata_conditions as _check_meta
+                rules = db.query(QARule).filter(QARule.enabled == True).filter(QARule.organization_id == org_id).order_by(QARule.sort_order).all()
+                call_subdir = call.subdirectory
+                call_meta = call.call_metadata or {}
                 rules = [r for r in rules if r.direction == "both" or r.direction == call_dir]
                 rules = [r for r in rules if not r.call_types or (call_type_key and call_type_key in r.call_types)]
+                rules = [r for r in rules if not r.subdirectories or (call_subdir and call_subdir in r.subdirectories)]
+                rules = [r for r in rules if _check_meta(r.metadata_conditions or [], call_meta)]
 
                 rules_data = [
                     {"rule_id": r.rule_id, "title": r.title, "description": r.description,
@@ -528,7 +547,7 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
                     for r in rules
                 ]
 
-                main_prompt_setting = get_setting(db, "main_prompt", MainPrompt)
+                main_prompt_setting = get_setting(db, "main_prompt", MainPrompt, org_id=org_id)
                 prompt = main_prompt_setting.prompt or None
 
                 result = await llm.analyze_call(transcript, rules_data, main_prompt=prompt, agent_name=call.agent_name)
@@ -570,7 +589,7 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
                     "timestamp": utcnow().isoformat(), "level": "info",
                     "source": "analysis",
                     "message": f"[{idx}/{len(call_ids)}] Reanalyzed {call.call_id}: {result.grade} ({round(result.overallScore, 1)}%)",
-                })
+                }, org_id=org_id)
                 await manager.broadcast("call_updated", {
                     "callId": call.id,
                     "status": call.status,
@@ -578,7 +597,7 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
                     "callType": call.call_type,
                     "index": idx,
                     "total": len(call_ids),
-                })
+                }, org_id=org_id)
 
             except Exception as e:
                 logger.error(f"Bulk reanalysis failed for {call_id}: {e}")
@@ -598,11 +617,11 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
                 await manager.broadcast("log", {
                     "timestamp": utcnow().isoformat(), "level": "error",
                     "source": "analysis", "message": f"Bulk reanalysis failed for call {call_id}: {e}",
-                })
+                }, org_id=org_id)
                 await manager.broadcast("call_updated", {
                     "callId": call_id, "status": "failed",
                     "index": idx, "total": len(call_ids),
-                })
+                }, org_id=org_id)
             finally:
                 db.close()
 
@@ -611,7 +630,7 @@ async def _bulk_reanalyze_bg(call_ids: list[str]):
     await manager.broadcast("log", {
         "timestamp": utcnow().isoformat(), "level": "info",
         "source": "analysis", "message": f"Bulk reanalysis complete: {len(call_ids)} calls",
-    })
-    await manager.broadcast("bulk_reanalyze_done", {"total": len(call_ids)})
+    }, org_id=org_id)
+    await manager.broadcast("bulk_reanalyze_done", {"total": len(call_ids)}, org_id=org_id)
 
 

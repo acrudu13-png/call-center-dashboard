@@ -33,7 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { type QARule } from "@/lib/mockData";
 import { saveQARule, deleteQARule, saveMainPrompt, saveClassificationSettings, saveCallType, removeCallType } from "@/lib/actions";
-import { fetchRules, fetchSetting, fetchCallTypes, type CallTypeInfo } from "@/lib/api";
+import { fetchRules, fetchSetting, fetchCallTypes, fetchSubdirectories, fetchMetadataFields, updateSubdirectory, type CallTypeInfo, type SubdirectoryInfo } from "@/lib/api";
 import {
   Plus,
   GripVertical,
@@ -47,6 +47,7 @@ import {
   Tag,
   Brain,
   ListChecks,
+  FolderOpen,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
@@ -87,9 +88,17 @@ export default function RulesEnginePage() {
   const [ctDialogOpen, setCtDialogOpen] = useState(false);
   const [ctSaving, setCtSaving] = useState(false);
 
+  // ── Subdirectory Rules tab state ──
+  const [subdirectories, setSubdirectories] = useState<SubdirectoryInfo[]>([]);
+
+  // ── Metadata fields (for conditions) ──
+  const [metaFields, setMetaFields] = useState<Record<string, string[]>>({});
+
   // Load data from API
   useEffect(() => {
     fetchCallTypes().then(setCallTypes).catch(() => {});
+    fetchSubdirectories().then(setSubdirectories).catch(() => {});
+    fetchMetadataFields().then((res) => setMetaFields(res.fields)).catch(() => {});
     fetchRules().then((apiRules) => {
       setRules(apiRules.map((r) => ({
         id: r.rule_id,
@@ -102,6 +111,8 @@ export default function RulesEnginePage() {
         isCritical: r.is_critical,
         direction: r.direction || "both",
         callTypes: r.call_types || [],
+        subdirectories: r.subdirectories || [],
+        metadataConditions: r.metadata_conditions || [],
         order: r.sort_order,
       })));
     }).catch(() => {});
@@ -286,6 +297,19 @@ export default function RulesEnginePage() {
     }
   };
 
+  // ── Subdirectory Rules handlers ──
+  const handleSubdirUpdate = async (key: string, field: string, value: string | boolean) => {
+    setSubdirectories((prev) =>
+      prev.map((s) => (s.key === key ? { ...s, [field]: value } : s))
+    );
+    try {
+      await updateSubdirectory(key, { [field]: value });
+    } catch {
+      // Reload on failure
+      fetchSubdirectories().then(setSubdirectories).catch(() => {});
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -307,6 +331,10 @@ export default function RulesEnginePage() {
             <Brain className="h-4 w-4" />
             Agent Tip Apel
           </TabsTrigger>
+          <TabsTrigger value="subdirectory-rules" className="gap-2">
+            <FolderOpen className="h-4 w-4" />
+            Reguli Subdirectoare
+          </TabsTrigger>
         </TabsList>
 
         {/* ════════════════════════════════════════════════════════════
@@ -325,7 +353,7 @@ export default function RulesEnginePage() {
 
           {/* Rule edit dialog */}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingRule?.id ? "Editare Regulă" : "Regulă Nouă"}
@@ -495,6 +523,128 @@ export default function RulesEnginePage() {
                           </label>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  {subdirectories.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label>Subdirectoare</Label>
+                      <p className="text-xs text-muted-foreground">Gol = toate subdirectoarele.</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {subdirectories.map((sd) => (
+                          <label key={sd.key} className="flex items-center gap-2 text-sm cursor-pointer p-1.5 rounded hover:bg-muted">
+                            <input
+                              type="checkbox"
+                              checked={(editingRule.subdirectories || []).includes(sd.key)}
+                              onChange={(e) => {
+                                const current = editingRule.subdirectories || [];
+                                setEditingRule({
+                                  ...editingRule,
+                                  subdirectories: e.target.checked
+                                    ? [...current, sd.key]
+                                    : current.filter((k: string) => k !== sd.key),
+                                });
+                              }}
+                              className="rounded"
+                            />
+                            {sd.display_name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {Object.keys(metaFields).length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label>Condiții metadata</Label>
+                      <p className="text-xs text-muted-foreground">Regula se aplică doar când toate condițiile sunt îndeplinite. Gol = fără condiții.</p>
+                      {(editingRule.metadataConditions || []).map((cond, ci) => (
+                        <div key={ci} className="flex gap-1.5 items-center">
+                          <Select
+                            value={cond.field}
+                            onValueChange={(v) => {
+                              if (!v) return;
+                              const updated = [...(editingRule.metadataConditions || [])];
+                              updated[ci] = { ...cond, field: v, value: "" };
+                              setEditingRule({ ...editingRule, metadataConditions: updated });
+                            }}
+                          >
+                            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {Object.keys(metaFields).map((f) => (
+                                <SelectItem key={f} value={f}>{f}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select
+                            value={cond.operator}
+                            onValueChange={(v) => {
+                              if (!v) return;
+                              const updated = [...(editingRule.metadataConditions || [])];
+                              updated[ci] = { ...cond, operator: v };
+                              setEditingRule({ ...editingRule, metadataConditions: updated });
+                            }}
+                          >
+                            <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="equals">=</SelectItem>
+                              <SelectItem value="not_equals">!=</SelectItem>
+                              <SelectItem value="contains">contains</SelectItem>
+                              <SelectItem value="not_contains">!contains</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {cond.field && metaFields[cond.field] ? (
+                            <Select
+                              value={cond.value}
+                              onValueChange={(v) => {
+                                if (!v) return;
+                                const updated = [...(editingRule.metadataConditions || [])];
+                                updated[ci] = { ...cond, value: v };
+                                setEditingRule({ ...editingRule, metadataConditions: updated });
+                              }}
+                            >
+                              <SelectTrigger className="flex-1"><SelectValue placeholder="value" /></SelectTrigger>
+                              <SelectContent>
+                                {metaFields[cond.field].map((val) => (
+                                  <SelectItem key={val} value={val}>{val}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              value={cond.value}
+                              onChange={(e) => {
+                                const updated = [...(editingRule.metadataConditions || [])];
+                                updated[ci] = { ...cond, value: e.target.value };
+                                setEditingRule({ ...editingRule, metadataConditions: updated });
+                              }}
+                              className="flex-1"
+                              placeholder="value"
+                            />
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const updated = (editingRule.metadataConditions || []).filter((_, i) => i !== ci);
+                              setEditingRule({ ...editingRule, metadataConditions: updated });
+                            }}
+                          >
+                            &times;
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const firstField = Object.keys(metaFields)[0] || "";
+                          setEditingRule({
+                            ...editingRule,
+                            metadataConditions: [...(editingRule.metadataConditions || []), { field: firstField, operator: "equals", value: "" }],
+                          });
+                        }}
+                      >
+                        + Adaugă condiție
+                      </Button>
                     </div>
                   )}
                   <div className="flex items-center gap-2">
@@ -907,6 +1057,69 @@ export default function RulesEnginePage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        {/* ════════════════════════════════════════════════════════════
+            TAB 3: Subdirectory Rules
+            ════════════════════════════════════════════════════════════ */}
+        <TabsContent value="subdirectory-rules" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-5 w-5" />
+                <div>
+                  <CardTitle>Reguli Subdirectoare</CardTitle>
+                  <CardDescription>
+                    Configurați direcția și starea fiecărui subdirector descoperit în timpul ingestiei. Subdirectoarele noi sunt adăugate automat.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {subdirectories.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  Nu există subdirectoare descoperite. Activați &quot;Recursive directory traversal&quot; în setările de ingestie și rulați o ingestie.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {subdirectories.map((sd) => (
+                    <div
+                      key={sd.key}
+                      className={`flex items-center gap-4 p-4 rounded-lg border ${!sd.enabled ? "opacity-50" : ""}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold">{sd.display_name}</span>
+                          <Badge variant="outline" className="text-xs font-mono">{sd.key}</Badge>
+                        </div>
+                        {sd.discovered_from && (
+                          <p className="text-xs text-muted-foreground">Descoperit din: {sd.discovered_from}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <Select
+                          value={sd.direction}
+                          onValueChange={(v) => v && handleSubdirUpdate(sd.key, "direction", v)}
+                        >
+                          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="inbound">Inbound</SelectItem>
+                            <SelectItem value="outbound">Outbound</SelectItem>
+                            <SelectItem value="both">Ambele</SelectItem>
+                            <SelectItem value="unknown">Necunoscut</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Switch
+                          checked={sd.enabled}
+                          onCheckedChange={(v) => handleSubdirUpdate(sd.key, "enabled", v)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

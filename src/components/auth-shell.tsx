@@ -24,9 +24,18 @@ const PATH_TO_PAGE_KEY: Record<string, string> = {
   "/docs": "docs",
 };
 
+// Superadmin-only paths
+const SUPERADMIN_PATHS = ["/admin/organizations", "/admin/usage"];
+
 function isPageAllowed(pathname: string, user: { allowed_pages?: string[]; role?: string } | null): boolean {
   if (!user) return false;
-  if (user.role === "admin") return true;
+
+  // Superadmin areas
+  if (SUPERADMIN_PATHS.some((p) => pathname.startsWith(p))) {
+    return user.role === "superadmin";
+  }
+
+  if (user.role === "superadmin" || user.role === "org_admin") return true;
   if (!user.allowed_pages?.length) return true; // empty = all pages
   if (pathname === "/") return true; // dashboard always allowed
 

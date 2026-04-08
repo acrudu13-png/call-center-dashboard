@@ -23,6 +23,8 @@ import {
   LogOut,
   User,
   Languages,
+  Building2,
+  BarChart3,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -47,6 +49,11 @@ const navItems: { href: string; key: NavKey; icon: React.ElementType }[] = [
   { href: "/settings/webhooks", key: "webhooks", icon: Webhook },
   { href: "/users", key: "users", icon: UserCog },
   { href: "/docs", key: "docs", icon: BookOpen },
+];
+
+const adminNavItems: { href: string; label: string; icon: React.ElementType }[] = [
+  { href: "/admin/organizations", label: "Organizations", icon: Building2 },
+  { href: "/admin/usage", label: "Platform Usage", icon: BarChart3 },
 ];
 
 export function Sidebar() {
@@ -79,6 +86,8 @@ export function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 flex flex-col py-4 gap-1 px-2 overflow-y-auto overflow-x-hidden">
         {navItems.filter((item) => {
+          // Superadmin and org_admin see everything
+          if (user?.role === "superadmin" || user?.role === "org_admin") return true;
           // If user has allowed_pages set, only show those pages (+ dashboard always)
           if (!user?.allowed_pages?.length) return true;
           if (item.key === "dashboard") return true;
@@ -116,6 +125,47 @@ export function Sidebar() {
           }
           return link;
         })}
+
+        {/* Superadmin section */}
+        {user?.role === "superadmin" && (
+          <>
+            <Separator className="my-2" />
+            {!collapsed && (
+              <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                Platform Admin
+              </p>
+            )}
+            {adminNavItems.map((item) => {
+              const isActive =
+                pathname === item.href || pathname.startsWith(item.href);
+              const link = (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center rounded-md py-2 text-sm font-medium transition-colors whitespace-nowrap overflow-hidden shrink-0",
+                    collapsed ? "justify-center px-0" : "gap-3 px-3",
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {!collapsed && <span>{item.label}</span>}
+                </Link>
+              );
+              if (collapsed) {
+                return (
+                  <Tooltip key={item.href}>
+                    <TooltipTrigger>{link}</TooltipTrigger>
+                    <TooltipContent side="right">{item.label}</TooltipContent>
+                  </Tooltip>
+                );
+              }
+              return link;
+            })}
+          </>
+        )}
       </nav>
 
       <Separator />
@@ -167,7 +217,10 @@ export function Sidebar() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{user.full_name || user.username}</p>
-                <p className="text-xs text-muted-foreground truncate">{user.role}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {user.role}
+                  {user.organization_name ? ` · ${user.organization_name}` : ""}
+                </p>
               </div>
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={logout}>
                 <LogOut className="h-3.5 w-3.5" />

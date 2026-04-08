@@ -1,4 +1,5 @@
 import os
+import stat
 import time
 import logging
 from typing import Optional, Callable
@@ -156,6 +157,87 @@ class SFTPService:
                     on_progress(idx, total, filename)
 
             return local_paths
+        finally:
+            sftp.close()
+            transport.close()
+
+    def download_folder_recursive(
+        self,
+        local_base_dir: str,
+        remote_path: Optional[str] = None,
+        on_progress: Optional[Callable[[int, int, str], None]] = None,
+        audio_extensions: tuple = (".wav", ".mp3", ".ogg", ".flac", ".au", ".aac", ".m4a"),
+    ) -> list[tuple[str, str]]:
+        """
+        Recursively traverse remote_path looking for subdirectories containing audio files.
+        Structure: remote_path/subdir_1/file.wav, remote_path/subdir_2/file.wav
+        Returns list of (local_path, subdirectory_name) tuples.
+        """
+        from datetime import timedelta
+        from app.database import utcnow
+
+        if not remote_path:
+            path = self.settings.remotePath
+            yesterday = (utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+            remote_path = path.replace("$yesterday_date", yesterday)
+
+        transport = self._get_transport()
+        sftp = paramiko.SFTPClient.from_transport(transport)
+
+        results: list[tuple[str, str]] = []
+        try:
+            # List top-level entries to find subdirectories
+            entries = sftp.listdir_attr(remote_path)
+            subdirs = [e.filename for e in entries if stat.S_ISDIR(e.st_mode)]
+
+            if not subdirs:
+                # No subdirectories — treat as flat directory, subdirectory = None
+                audio_files = [e.filename for e in entries if any(e.filename.lower().endswith(ext) for ext in audio_extensions)]
+                total = len(audio_files)
+                logger.info(f"No subdirectories found in {remote_path}. {total} audio files in root.")
+                target_dir = os.path.join(local_base_dir, os.path.basename(remote_path))
+                os.makedirs(target_dir, exist_ok=True)
+                for idx, fname in enumerate(audio_files, 1):
+                    local_path = os.path.join(target_dir, fname)
+                    if not os.path.exists(local_path):
+                        sftp.get(f"{remote_path}/{fname}", local_path)
+                    results.append((local_path, ""))
+                    if on_progress:
+                        on_progress(idx, total, fname)
+                return results
+
+            # Collect all audio files across subdirectories
+            all_files: list[tuple[str, str, str]] = []  # (remote, subdir, filename)
+            for subdir in sorted(subdirs):
+                subdir_path = f"{remote_path}/{subdir}"
+                try:
+                    sub_entries = sftp.listdir(subdir_path)
+                    for fname in sub_entries:
+                        if any(fname.lower().endswith(ext) for ext in audio_extensions):
+                            all_files.append((f"{subdir_path}/{fname}", subdir, fname))
+                except Exception as e:
+                    logger.warning(f"Cannot list {subdir_path}: {e}")
+
+            total = len(all_files)
+            logger.info(f"Found {total} audio files across {len(subdirs)} subdirectories in {remote_path}")
+
+            for idx, (remote_file, subdir, fname) in enumerate(all_files, 1):
+                local_subdir = os.path.join(local_base_dir, os.path.basename(remote_path), subdir)
+                os.makedirs(local_subdir, exist_ok=True)
+                local_path = os.path.join(local_subdir, fname)
+
+                if not os.path.exists(local_path):
+                    sftp.get(remote_file, local_path)
+                    logger.info(f"[{idx}/{total}] Downloaded: {subdir}/{fname}")
+                else:
+                    logger.info(f"[{idx}/{total}] Skipping (exists): {subdir}/{fname}")
+
+                results.append((local_path, subdir))
+
+                if on_progress:
+                    on_progress(idx, total, f"{subdir}/{fname}")
+
+            return results
         finally:
             sftp.close()
             transport.close()

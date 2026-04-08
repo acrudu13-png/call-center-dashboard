@@ -6,19 +6,20 @@ from app.models.rule import QARule
 from app.schemas.rule import (
     QARuleCreate, QARuleUpdate, QARuleResponse, ReorderRequest,
 )
-from app.auth import get_current_user, require_role, require_page
+from app.auth import get_current_user, require_role, require_page, scope_query, get_org_id
 
 router = APIRouter(prefix="/api/rules", tags=["rules"], dependencies=[Depends(require_page("rules"))])
 
 
 @router.get("", response_model=list[QARuleResponse])
-def list_rules(db: Session = Depends(get_db)):
-    rules = db.query(QARule).order_by(QARule.sort_order).all()
+def list_rules(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    rules = scope_query(db.query(QARule), QARule, current_user).order_by(QARule.sort_order).all()
     return [
         QARuleResponse(
             rule_id=r.rule_id, title=r.title, description=r.description,
             section=r.section, rule_type=r.rule_type, max_score=r.max_score,
             enabled=r.enabled, is_critical=r.is_critical, direction=r.direction, call_types=r.call_types or [],
+            subdirectories=r.subdirectories or [], metadata_conditions=r.metadata_conditions or [],
             sort_order=r.sort_order,
         )
         for r in rules
@@ -26,11 +27,12 @@ def list_rules(db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=QARuleResponse, status_code=201)
-def create_rule(payload: QARuleCreate, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
-    existing = db.query(QARule).filter(QARule.rule_id == payload.rule_id).first()
+def create_rule(payload: QARuleCreate, _user=Depends(require_role("org_admin", "manager")), db: Session = Depends(get_db)):
+    org_id = get_org_id(_user)
+    existing = db.query(QARule).filter(QARule.organization_id == org_id, QARule.rule_id == payload.rule_id).first()
     if existing:
         raise HTTPException(status_code=409, detail="Rule ID already exists")
-    rule = QARule(**payload.model_dump())
+    rule = QARule(organization_id=org_id, **payload.model_dump())
     db.add(rule)
     db.commit()
     db.refresh(rule)
@@ -38,13 +40,15 @@ def create_rule(payload: QARuleCreate, _user=Depends(require_role("admin", "mana
         rule_id=rule.rule_id, title=rule.title, description=rule.description,
         section=rule.section, rule_type=rule.rule_type, max_score=rule.max_score,
         enabled=rule.enabled, is_critical=rule.is_critical, direction=rule.direction, call_types=rule.call_types or [],
+        subdirectories=rule.subdirectories or [], metadata_conditions=rule.metadata_conditions or [],
         sort_order=rule.sort_order,
     )
 
 
 @router.put("/{rule_id}", response_model=QARuleResponse)
-def update_rule(rule_id: str, payload: QARuleUpdate, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
-    rule = db.query(QARule).filter(QARule.rule_id == rule_id).first()
+def update_rule(rule_id: str, payload: QARuleUpdate, _user=Depends(require_role("org_admin", "manager")), current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    org_id = get_org_id(current_user)
+    rule = db.query(QARule).filter(QARule.organization_id == org_id, QARule.rule_id == rule_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
     for field, value in payload.model_dump(exclude_unset=True).items():
@@ -55,13 +59,15 @@ def update_rule(rule_id: str, payload: QARuleUpdate, _user=Depends(require_role(
         rule_id=rule.rule_id, title=rule.title, description=rule.description,
         section=rule.section, rule_type=rule.rule_type, max_score=rule.max_score,
         enabled=rule.enabled, is_critical=rule.is_critical, direction=rule.direction, call_types=rule.call_types or [],
+        subdirectories=rule.subdirectories or [], metadata_conditions=rule.metadata_conditions or [],
         sort_order=rule.sort_order,
     )
 
 
 @router.delete("/{rule_id}")
-def delete_rule(rule_id: str, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
-    rule = db.query(QARule).filter(QARule.rule_id == rule_id).first()
+def delete_rule(rule_id: str, _user=Depends(require_role("org_admin", "manager")), current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    org_id = get_org_id(current_user)
+    rule = db.query(QARule).filter(QARule.organization_id == org_id, QARule.rule_id == rule_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
     db.delete(rule)
@@ -70,9 +76,10 @@ def delete_rule(rule_id: str, _user=Depends(require_role("admin", "manager")), d
 
 
 @router.post("/reorder")
-def reorder_rules(payload: ReorderRequest, _user=Depends(require_role("admin", "manager")), db: Session = Depends(get_db)):
+def reorder_rules(payload: ReorderRequest, _user=Depends(require_role("org_admin", "manager")), current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    org_id = get_org_id(current_user)
     for idx, rule_id in enumerate(payload.rule_ids):
-        rule = db.query(QARule).filter(QARule.rule_id == rule_id).first()
+        rule = db.query(QARule).filter(QARule.organization_id == org_id, QARule.rule_id == rule_id).first()
         if rule:
             rule.sort_order = idx
     db.commit()

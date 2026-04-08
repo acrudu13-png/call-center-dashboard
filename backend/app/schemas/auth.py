@@ -10,6 +10,7 @@ class UserCreate(BaseModel):
     role: str = "viewer"
     allowed_agents: list[str] = []   # [] = all agents
     allowed_pages: list[str] = []    # [] = all pages
+    organization_id: Optional[str] = None
 
     @field_validator("password")
     @classmethod
@@ -59,6 +60,8 @@ class UserResponse(BaseModel):
     is_active: bool
     allowed_agents: list[str] = []
     allowed_pages: list[str] = []
+    organization_id: Optional[str] = None
+    organization_name: Optional[str] = None
 
 
 class UserListResponse(BaseModel):

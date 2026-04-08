@@ -1,8 +1,12 @@
 """
 Seed script: populates the database with realistic demo data matching the frontend mockData.
 Run: python -m app.seed
+
+Optional environment variable:
+  SEED_ORG_SLUG  — slug of the organization to seed into (default: "default")
 """
 import json
+import os
 import random
 import uuid
 from datetime import datetime, timedelta
@@ -11,6 +15,7 @@ from app.models.call import Call, TranscriptLine, ScorecardEntry
 from app.models.rule import QARule
 from app.models.job import TranscriptionJob, LogEntry
 from app.models.setting import Setting
+from app.models.organization import Organization
 
 random.seed(42)
 
@@ -100,9 +105,21 @@ def seed():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
-    # Check if already seeded
-    if db.query(QARule).count() > 0:
-        print("Database already seeded. Skipping.")
+    # Resolve target organization
+    slug = os.getenv("SEED_ORG_SLUG", "default")
+    org = db.query(Organization).filter(Organization.slug == slug).first()
+    if not org:
+        print(f"Organization with slug '{slug}' not found. Available organizations:")
+        for o in db.query(Organization).all():
+            print(f"  - {o.slug} ({o.name})")
+        db.close()
+        return
+    org_id = org.id
+    print(f"Seeding into organization: {org.name} ({org.slug})")
+
+    # Check if already seeded for this org
+    if db.query(QARule).filter(QARule.organization_id == org_id).count() > 0:
+        print("Organization already has rules. Skipping.")
         db.close()
         return
 
@@ -111,6 +128,7 @@ def seed():
     # 1. QA Rules
     for idx, (rid, title, desc, section, rtype, max_score, critical, _) in enumerate(RULES):
         db.add(QARule(
+            organization_id=org_id,
             rule_id=rid, title=title, description=desc, section=section,
             rule_type=rtype, max_score=max_score, enabled=True,
             is_critical=critical, sort_order=idx,
@@ -158,6 +176,7 @@ def seed():
 
         call = Call(
             id=call_uuid,
+            organization_id=org_id,
             call_id=call_id_str,
             date_time=call_date,
             agent_name=agent[1],
@@ -204,11 +223,18 @@ def seed():
     db.commit()
     print("  Created 50 calls with transcripts and scorecards.")
 
+    # Sync the per-org call counter so future ingestion continues from CALL-1050
+    from app.services.call_counter_service import reset_counter
+    reset_counter(db, org_id, 1000 + 49)  # last seeded call is CALL-1049
+    db.commit()
+    print("  Synced call counter to CALL-1049.")
+
     # 3. Transcription jobs
     for i in range(15):
         status = random.choice(["completed", "completed", "completed", "failed", "transcribing"])
         created = now - timedelta(hours=random.randint(1, 72))
         db.add(TranscriptionJob(
+            organization_id=org_id,
             job_id=f"JOB-{uuid.uuid4().hex[:8].upper()}",
             file_name=f"recording_{1000+i}.wav",
             source=random.choice(["sftp", "s3"]),
@@ -239,6 +265,7 @@ def seed():
         ts = now - timedelta(hours=random.randint(0, 100))
         msg = random.choice(messages).format(score=random.randint(50, 95))
         db.add(LogEntry(
+            organization_id=org_id,
             timestamp=ts,
             level=random.choice(levels),
             source=random.choice(sources),
@@ -260,7 +287,13 @@ def seed():
         "call_context": '{"context":""}',
     }
     for key, value in defaults.items():
-        db.add(Setting(key=key, value=value))
+        # Skip if already exists for this org
+        existing_setting = db.query(Setting).filter(
+            Setting.organization_id == org_id,
+            Setting.key == key,
+        ).first()
+        if not existing_setting:
+            db.add(Setting(organization_id=org_id, key=key, value=value))
     db.commit()
     print("  Created default settings.")
 

@@ -69,7 +69,8 @@ const ALL_PAGES = [
 ];
 
 const ROLE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  admin: { label: "Admin", icon: ShieldCheck, color: "text-red-600" },
+  superadmin: { label: "Superadmin", icon: ShieldCheck, color: "text-purple-600" },
+  org_admin: { label: "Org Admin", icon: ShieldCheck, color: "text-red-600" },
   manager: { label: "Manager", icon: Shield, color: "text-blue-600" },
   viewer: { label: "Viewer", icon: Eye, color: "text-muted-foreground" },
 };
@@ -411,7 +412,7 @@ export default function UsersPage() {
               <Select value={role} onValueChange={(v) => v && setRole(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent className="min-w-[350px]">
-                  <SelectItem value="admin">Admin — acces complet + gestionare utilizatori</SelectItem>
+                  <SelectItem value="org_admin">Org Admin — acces complet + gestionare utilizatori</SelectItem>
                   <SelectItem value="manager">Manager — acces complet</SelectItem>
                   <SelectItem value="viewer">Viewer — doar vizualizare</SelectItem>
                 </SelectContent>
@@ -419,7 +420,7 @@ export default function UsersPage() {
             </div>
 
             {/* Agent restrictions */}
-            {role !== "admin" && (
+            {role !== "org_admin" && (
               <div className="space-y-1.5 pt-3 border-t">
                 <Label>{t.users.allowedAgents}</Label>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -453,7 +454,7 @@ export default function UsersPage() {
             )}
 
             {/* Page restrictions */}
-            {role !== "admin" && (
+            {role !== "org_admin" && (
               <div className="space-y-1.5 pt-3 border-t">
                 <Label>{t.users.allowedPages}</Label>
                 <p className="text-xs text-muted-foreground mb-2">

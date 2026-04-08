@@ -6,7 +6,7 @@ from typing import Optional
 from app.database import get_db
 from app.models.job import TranscriptionJob, LogEntry
 from app.schemas.job import JobResponse, JobListResponse, LogEntryResponse, LogListResponse
-from app.auth import get_current_user, require_page
+from app.auth import get_current_user, require_page, scope_query
 
 router = APIRouter(prefix="/api/logs", tags=["logs"], dependencies=[Depends(require_page("logs"))])
 
@@ -17,8 +17,10 @@ def list_jobs(
     pageSize: int = Query(20, ge=1, le=100),
     status: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     query = db.query(TranscriptionJob)
+    query = scope_query(query, TranscriptionJob, current_user)
     if status:
         query = query.filter(TranscriptionJob.status == status)
 
@@ -53,8 +55,10 @@ def list_log_entries(
     source: Optional[str] = None,
     jobId: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     query = db.query(LogEntry)
+    query = scope_query(query, LogEntry, current_user)
     if level:
         query = query.filter(LogEntry.level == level)
     if source:
