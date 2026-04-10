@@ -1,18 +1,17 @@
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from app.config import settings
 
-# Use TZ env var. Default to Europe/Bucharest (UTC+3 EEST / UTC+2 EET).
-# For simplicity we use a fixed +3 offset. For DST-aware, use zoneinfo.
+# Use TZ env var. Default to Europe/Bucharest. Uses zoneinfo for proper DST.
 _TZ_NAME = os.getenv("TZ", "Europe/Bucharest")
-_TZ_OFFSET = timedelta(hours=3)  # Romania EEST
-APP_TZ = timezone(_TZ_OFFSET)
+APP_TZ = ZoneInfo(_TZ_NAME)
 
 
 def now() -> datetime:
-    """Current time in the app timezone (Europe/Bucharest)."""
+    """Current time in the app timezone (DST-aware)."""
     return datetime.now(APP_TZ)
 
 
