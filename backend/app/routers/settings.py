@@ -58,15 +58,22 @@ def sftp_list_directories(_user=Depends(require_role("org_admin", "manager")), d
     else:
         parent = base_path.rstrip("/")
 
+    from fastapi import Query as FQuery
+    limit = 20
+
     transport = svc._get_transport()
     sftp = paramiko.SFTPClient.from_transport(transport)
     try:
         entries = sftp.listdir_attr(parent)
+        # Sort newest first, take only directories, limit to most recent
+        dir_entries = sorted(
+            [e for e in entries if stat_mod.S_ISDIR(e.st_mode)],
+            key=lambda x: x.filename,
+            reverse=True,
+        )[:limit]
+
         directories = []
-        for e in sorted(entries, key=lambda x: x.filename, reverse=True):
-            if not stat_mod.S_ISDIR(e.st_mode):
-                continue
-            # Count audio files in this directory (and subdirectories one level deep)
+        for e in dir_entries:
             dir_path = f"{parent}/{e.filename}"
             file_count = 0
             try:
@@ -74,7 +81,6 @@ def sftp_list_directories(_user=Depends(require_role("org_admin", "manager")), d
                 audio_files = [s for s in sub_entries if s.filename.lower().endswith(exts)]
                 sub_dirs = [s for s in sub_entries if stat_mod.S_ISDIR(s.st_mode)]
                 file_count = len(audio_files)
-                # Also count files in subdirectories
                 for sd in sub_dirs:
                     try:
                         deep_files = sftp.listdir(f"{dir_path}/{sd.filename}")
