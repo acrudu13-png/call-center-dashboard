@@ -137,7 +137,7 @@ async def analyze_call(payload: AnalyzeRequest, db: Session = Depends(get_db), c
     }, org_id=org_id)
 
     # Get prompt
-    main_prompt_setting = _get_setting(db, "main_prompt", MainPrompt, org_id=org_id)
+    main_prompt_setting = _get_setting(db, "main-prompt", MainPrompt, org_id=org_id)
     prompt = payload.mainPrompt or main_prompt_setting.prompt or None
 
     # Run analysis
@@ -547,7 +547,7 @@ async def _bulk_reanalyze_bg(call_ids: list[str], org_id: str = None):
                     for r in rules
                 ]
 
-                main_prompt_setting = get_setting(db, "main_prompt", MainPrompt, org_id=org_id)
+                main_prompt_setting = get_setting(db, "main-prompt", MainPrompt, org_id=org_id)
                 prompt = main_prompt_setting.prompt or None
 
                 result = await llm.analyze_call(transcript, rules_data, main_prompt=prompt, agent_name=call.agent_name)

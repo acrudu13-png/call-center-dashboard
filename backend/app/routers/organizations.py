@@ -83,6 +83,12 @@ def create_organization(
     db.add(CallCounter(organization_id=org.id, last_call_num=999))
     db.commit()
     db.refresh(org)
+    # Create a cron job for the new org (uses default schedule)
+    try:
+        from app.scheduler import update_org_schedule
+        update_org_schedule(org.id)
+    except Exception:
+        pass
     return _org_to_response(org)
 
 
@@ -122,6 +128,12 @@ def update_organization(
         org.is_active = body.is_active
     db.commit()
     db.refresh(org)
+    # Update cron job (creates or removes based on is_active)
+    try:
+        from app.scheduler import update_org_schedule
+        update_org_schedule(org.id)
+    except Exception:
+        pass
     return _org_to_response(org)
 
 
@@ -137,6 +149,12 @@ def delete_organization(
         raise HTTPException(status_code=404, detail="Organization not found")
     org.is_active = False
     db.commit()
+    # Remove the cron job
+    try:
+        from app.scheduler import update_org_schedule
+        update_org_schedule(org_id)
+    except Exception:
+        pass
     return {"message": f"Organization '{org.name}' deactivated"}
 
 

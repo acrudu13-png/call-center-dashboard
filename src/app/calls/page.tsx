@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -58,23 +58,31 @@ type SortDir = "asc" | "desc";
 
 export default function CallsExplorerPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const testMode = searchParams.get("test-mode") === "true";
   const { t } = useTranslation();
-  const [search, setSearch] = useState("");
-  const [minScore, setMinScore] = useState("");
-  const [maxScore, setMaxScore] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [minScore, setMinScore] = useState(searchParams.get("minScore") || "");
+  const [maxScore, setMaxScore] = useState(searchParams.get("maxScore") || "");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "all");
   const [ruleFilter, setRuleFilter] = useState("all");
-  const [agentFilter, setAgentFilter] = useState("all");
+  const [agentFilter, setAgentFilter] = useState(searchParams.get("agentId") || "all");
   const [agents, setAgents] = useState<{ agentId: string; agentName: string; callCount: number }[]>([]);
-  const [directionFilter, setDirectionFilter] = useState("all");
-  const [callTypeFilter, setCallTypeFilter] = useState("all");
-  const [subdirFilter, setSubdirFilter] = useState("all");
-  const [runFilter, setRunFilter] = useState("all");
+  const [directionFilter, setDirectionFilter] = useState(searchParams.get("direction") || "all");
+  const [callTypeFilter, setCallTypeFilter] = useState(searchParams.get("callType") || "all");
+  const [subdirFilter, setSubdirFilter] = useState(searchParams.get("subdirectory") || "all");
+  const [runFilter, setRunFilter] = useState(searchParams.get("runId") || "all");
   const [ingestionRuns, setIngestionRuns] = useState<IngestionRunListItem[]>([]);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
+  const [dateFrom, setDateFrom] = useState(searchParams.get("dateFrom") || "");
+  const [dateTo, setDateTo] = useState(searchParams.get("dateTo") || "");
+  const [showFilters, setShowFilters] = useState(
+    // Auto-expand filters panel if any filter is set via URL
+    !!(searchParams.get("agentId") || searchParams.get("status") || searchParams.get("direction")
+      || searchParams.get("callType") || searchParams.get("subdirectory") || searchParams.get("runId")
+      || searchParams.get("minScore") || searchParams.get("maxScore")
+      || searchParams.get("dateFrom") || searchParams.get("dateTo"))
+  );
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -150,6 +158,26 @@ export default function CallsExplorerPage() {
   useEffect(() => {
     loadCalls();
   }, [loadCalls]);
+
+  // Sync filter state to URL so links are shareable
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (agentFilter !== "all") params.set("agentId", agentFilter);
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (directionFilter !== "all") params.set("direction", directionFilter);
+    if (callTypeFilter !== "all") params.set("callType", callTypeFilter);
+    if (subdirFilter !== "all") params.set("subdirectory", subdirFilter);
+    if (runFilter !== "all") params.set("runId", runFilter);
+    if (minScore) params.set("minScore", minScore);
+    if (maxScore) params.set("maxScore", maxScore);
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
+    if (search) params.set("search", search);
+    if (testMode) params.set("test-mode", "true");
+    const qs = params.toString();
+    const newUrl = qs ? `${pathname}?${qs}` : pathname;
+    router.replace(newUrl, { scroll: false });
+  }, [agentFilter, statusFilter, directionFilter, callTypeFilter, subdirFilter, runFilter, minScore, maxScore, dateFrom, dateTo, search, testMode, pathname, router]);
 
   // Refresh calls list when a call finishes reanalyzing
   useEffect(() => {

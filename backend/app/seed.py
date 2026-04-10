@@ -281,10 +281,10 @@ def seed():
         "llm": '{"openRouterApiKey":"","defaultModel":"anthropic/claude-4.6-sonnet","temperature":0.1,"maxTokens":4096}',
         "soniox": '{"apiKey":"","language":"ro","model":"soniox-default"}',
         "webhook": '{"endpointUrl":"https://api.internal.telecom-ro.com/webhooks/qa-results","enabled":true,"retryCount":3,"headers":{}}',
-        "ingest_schedule": '{"cronHour":6,"enabled":true}',
-        "metadata_mapping": '{"agentIdField":"agent_id","customerPhoneField":"customer_phone","dateTimeField":"date_time","durationField":"duration"}',
-        "main_prompt": '{"prompt":""}',
-        "call_context": '{"context":""}',
+        "ingest-schedule": '{"cronHour":6,"enabled":true}',
+        "metadata-mapping": '{"agentIdField":"agent_id","customerPhoneField":"customer_phone","dateTimeField":"date_time","durationField":"duration"}',
+        "main-prompt": '{"prompt":""}',
+        "call-context": '{"context":""}',
     }
     for key, value in defaults.items():
         # Skip if already exists for this org

@@ -189,52 +189,60 @@ async def test_webhook(_user=Depends(require_role("org_admin", "manager")), db: 
 @router.get("/ingest-schedule", response_model=IngestSchedule)
 def get_ingest_schedule(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     org_id = get_org_id(current_user)
-    return _get_setting(db, "ingest_schedule", IngestSchedule, org_id)
+    return _get_setting(db, "ingest-schedule", IngestSchedule, org_id)
 
 
 @router.put("/ingest-schedule", response_model=IngestSchedule)
 def save_ingest_schedule(payload: IngestSchedule, _user=Depends(require_role("org_admin", "manager")), db: Session = Depends(get_db)):
     org_id = get_org_id(_user)
-    return _save_setting(db, "ingest_schedule", payload, org_id)
+    result = _save_setting(db, "ingest-schedule", payload, org_id)
+    # Live-update the cron job for this org
+    try:
+        from app.scheduler import update_org_schedule
+        update_org_schedule(org_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to update scheduler for org {org_id}: {e}")
+    return result
 
 
 # --- Metadata Mapping ---
 @router.get("/metadata-mapping", response_model=MetadataMapping)
 def get_metadata_mapping(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     org_id = get_org_id(current_user)
-    return _get_setting(db, "metadata_mapping", MetadataMapping, org_id)
+    return _get_setting(db, "metadata-mapping", MetadataMapping, org_id)
 
 
 @router.put("/metadata-mapping", response_model=MetadataMapping)
 def save_metadata_mapping(payload: MetadataMapping, _user=Depends(require_role("org_admin", "manager")), db: Session = Depends(get_db)):
     org_id = get_org_id(_user)
-    return _save_setting(db, "metadata_mapping", payload, org_id)
+    return _save_setting(db, "metadata-mapping", payload, org_id)
 
 
 # --- Main Prompt ---
 @router.get("/main-prompt", response_model=MainPrompt)
 def get_main_prompt(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     org_id = get_org_id(current_user)
-    return _get_setting(db, "main_prompt", MainPrompt, org_id)
+    return _get_setting(db, "main-prompt", MainPrompt, org_id)
 
 
 @router.put("/main-prompt", response_model=MainPrompt)
 def save_main_prompt(payload: MainPrompt, _user=Depends(require_role("org_admin", "manager")), db: Session = Depends(get_db)):
     org_id = get_org_id(_user)
-    return _save_setting(db, "main_prompt", payload, org_id)
+    return _save_setting(db, "main-prompt", payload, org_id)
 
 
 # --- Call Context ---
 @router.get("/call-context", response_model=CallContext)
 def get_call_context(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     org_id = get_org_id(current_user)
-    return _get_setting(db, "call_context", CallContext, org_id)
+    return _get_setting(db, "call-context", CallContext, org_id)
 
 
 @router.put("/call-context", response_model=CallContext)
 def save_call_context(payload: CallContext, _user=Depends(require_role("org_admin", "manager")), db: Session = Depends(get_db)):
     org_id = get_org_id(_user)
-    return _save_setting(db, "call_context", payload, org_id)
+    return _save_setting(db, "call-context", payload, org_id)
 
 
 # --- Custom Vocabulary ---
