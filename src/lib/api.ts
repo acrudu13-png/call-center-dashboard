@@ -313,6 +313,16 @@ export async function fetchSampleFilenames(): Promise<{ filenames: string[]; err
   return apiFetch("/api/settings/sftp/sample-files");
 }
 
+export interface SftpDirectory {
+  name: string;
+  path: string;
+  fileCount: number;
+}
+
+export async function fetchSftpDirectories(): Promise<{ directories: SftpDirectory[]; basePath: string; error?: string }> {
+  return apiFetch("/api/settings/sftp/directories");
+}
+
 export async function testConnection(key: string): Promise<{
   success: boolean;
   message: string;

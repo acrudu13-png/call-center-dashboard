@@ -35,7 +35,7 @@ import {
   saveFilenameParser,
   triggerManualIngestionCheck,
 } from "@/lib/actions";
-import { fetchSetting, fetchSampleFilenames } from "@/lib/api";
+import { fetchSetting, fetchSampleFilenames, fetchSftpDirectories, type SftpDirectory } from "@/lib/api";
 import {
   Server,
   Cloud,
@@ -48,6 +48,9 @@ import {
   Clock,
   Play,
   Info,
+  FolderOpen,
+  Search,
+  Music,
 } from "lucide-react";
 
 interface FilenameParserState {
@@ -109,6 +112,14 @@ export default function IngestionSettingsPage() {
   const [customPath, setCustomPath] = useState<string | null>(null);
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  // Directory browser state
+  const [directories, setDirectories] = useState<SftpDirectory[]>([]);
+  const [dirLoading, setDirLoading] = useState(false);
+  const [dirError, setDirError] = useState<string | null>(null);
+  const [dirSearch, setDirSearch] = useState("");
+  const [selectedDir, setSelectedDir] = useState<SftpDirectory | null>(null);
+  const [dirIngesting, setDirIngesting] = useState(false);
 
   const showStatus = (msg: string) => {
     setStatusMessage(msg);
@@ -495,22 +506,149 @@ export default function IngestionSettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Manual Ingestion Check</CardTitle>
-              <CardDescription>
-                Immediately check the remote path for new files without waiting for the next scheduled run.
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Manual Ingestion</CardTitle>
+                  <CardDescription>
+                    Browse available directories on the SFTP server and run ingestion on a specific folder.
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  disabled={dirLoading}
+                  onClick={async () => {
+                    setDirLoading(true);
+                    setDirError(null);
+                    setSelectedDir(null);
+                    try {
+                      const res = await fetchSftpDirectories();
+                      if (res.error) {
+                        setDirError(res.error);
+                        setDirectories([]);
+                      } else {
+                        setDirectories(res.directories);
+                      }
+                    } catch (e) {
+                      setDirError(e instanceof Error ? e.message : "Failed to fetch directories");
+                      setDirectories([]);
+                    } finally {
+                      setDirLoading(false);
+                    }
+                  }}
+                >
+                  {dirLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}
+                  Fetch Directories
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4 max-w-xl">
-                <div className="space-y-1.5">
-                  <Label>Remote Path for Check</Label>
-                  <Input value={customPath ?? resolvedPath} onChange={(e) => setCustomPath(e.target.value)} className="font-mono text-sm" />
-                  <p className="text-xs text-muted-foreground">Leave blank to use the default scheduled path.</p>
+              <div className="space-y-4">
+                {dirError && (
+                  <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <XCircle className="h-4 w-4 shrink-0" />
+                    {dirError}
+                  </div>
+                )}
+
+                {directories.length > 0 && (
+                  <>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={dirSearch}
+                        onChange={(e) => setDirSearch(e.target.value)}
+                        placeholder="Search directories..."
+                        className="pl-9"
+                      />
+                    </div>
+                    <div className="border rounded-lg max-h-[320px] overflow-y-auto divide-y">
+                      {directories
+                        .filter((d) => d.name.toLowerCase().includes(dirSearch.toLowerCase()))
+                        .map((dir) => (
+                          <button
+                            key={dir.path}
+                            className={`w-full flex items-center justify-between px-4 py-3 text-left text-sm transition-colors hover:bg-muted/50 ${
+                              selectedDir?.path === dir.path
+                                ? "bg-primary/5 border-l-2 border-l-primary"
+                                : ""
+                            }`}
+                            onClick={() => setSelectedDir(selectedDir?.path === dir.path ? null : dir)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="font-mono">{dir.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Music className="h-3 w-3" />
+                              <span className="text-xs">{dir.fileCount} file{dir.fileCount !== 1 ? "s" : ""}</span>
+                            </div>
+                          </button>
+                        ))}
+                      {directories.filter((d) => d.name.toLowerCase().includes(dirSearch.toLowerCase())).length === 0 && (
+                        <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                          No directories match &quot;{dirSearch}&quot;
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {directories.length} director{directories.length !== 1 ? "ies" : "y"} found.
+                      {selectedDir ? ` Selected: ${selectedDir.name}` : " Click a directory to select it."}
+                    </p>
+                  </>
+                )}
+
+                {directories.length === 0 && !dirLoading && !dirError && (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    Click &quot;Fetch Directories&quot; to browse available folders on the SFTP server.
+                  </p>
+                )}
+
+                <Separator />
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={async () => {
+                      if (!selectedDir) return;
+                      setDirIngesting(true);
+                      setManualCheckResult(null);
+                      try {
+                        const result = await triggerManualIngestionCheck(selectedDir.path);
+                        setManualCheckResult(result.message);
+                      } catch (e) {
+                        setManualCheckResult(e instanceof Error ? e.message : "Failed to trigger ingestion");
+                      } finally {
+                        setDirIngesting(false);
+                      }
+                    }}
+                    disabled={!selectedDir || dirIngesting}
+                    className="gap-2"
+                  >
+                    {dirIngesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    {dirIngesting ? "Running..." : selectedDir ? `Ingest ${selectedDir.name}` : "Select a directory"}
+                  </Button>
+
+                  <span className="text-muted-foreground text-sm">or</span>
+
+                  <div className="flex items-center gap-2 flex-1">
+                    <Input
+                      value={customPath ?? resolvedPath}
+                      onChange={(e) => setCustomPath(e.target.value)}
+                      className="font-mono text-sm"
+                      placeholder="Custom remote path..."
+                    />
+                    <Button
+                      onClick={handleManualCheck}
+                      disabled={manualChecking}
+                      variant="outline"
+                      className="gap-2 shrink-0"
+                    >
+                      {manualChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                      Run
+                    </Button>
+                  </div>
                 </div>
-                <Button onClick={handleManualCheck} disabled={manualChecking} variant="outline" className="gap-2">
-                  {manualChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  {manualChecking ? "Checking..." : "Check Now"}
-                </Button>
+
                 {manualCheckResult && (
                   <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">
                     <CheckCircle2 className="h-4 w-4 shrink-0" />

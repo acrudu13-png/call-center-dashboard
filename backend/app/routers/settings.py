@@ -38,6 +38,64 @@ def test_sftp(_user=Depends(require_role("org_admin", "manager")), db: Session =
     return svc.test_connection()
 
 
+@router.get("/sftp/directories")
+def sftp_list_directories(_user=Depends(require_role("org_admin", "manager")), db: Session = Depends(get_db)):
+    """List available date directories from the SFTP remote path.
+    Returns directory names (e.g. 2026-04-08, 2026-04-07) with file counts."""
+    import stat as stat_mod
+    org_id = get_org_id(_user)
+    settings = _get_setting(db, "sftp", SftpSettings, org_id)
+    parser = _get_setting(db, "filename-parser", FilenameParserSettings, org_id)
+    svc = SFTPService(settings)
+
+    import paramiko
+    exts = tuple(parser.audioExtensions) if parser.audioExtensions else (".au", ".wav", ".mp3", ".ogg", ".flac")
+
+    # Resolve the base path (before $yesterday_date)
+    base_path = settings.remotePath
+    if "$yesterday_date" in base_path:
+        parent = base_path.split("$yesterday_date")[0].rstrip("/")
+    else:
+        parent = base_path.rstrip("/")
+
+    transport = svc._get_transport()
+    sftp = paramiko.SFTPClient.from_transport(transport)
+    try:
+        entries = sftp.listdir_attr(parent)
+        directories = []
+        for e in sorted(entries, key=lambda x: x.filename, reverse=True):
+            if not stat_mod.S_ISDIR(e.st_mode):
+                continue
+            # Count audio files in this directory (and subdirectories one level deep)
+            dir_path = f"{parent}/{e.filename}"
+            file_count = 0
+            try:
+                sub_entries = sftp.listdir_attr(dir_path)
+                audio_files = [s for s in sub_entries if s.filename.lower().endswith(exts)]
+                sub_dirs = [s for s in sub_entries if stat_mod.S_ISDIR(s.st_mode)]
+                file_count = len(audio_files)
+                # Also count files in subdirectories
+                for sd in sub_dirs:
+                    try:
+                        deep_files = sftp.listdir(f"{dir_path}/{sd.filename}")
+                        file_count += sum(1 for f in deep_files if f.lower().endswith(exts))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            directories.append({
+                "name": e.filename,
+                "path": dir_path,
+                "fileCount": file_count,
+            })
+        return {"directories": directories, "basePath": parent}
+    except Exception as e:
+        return {"directories": [], "basePath": parent, "error": str(e)[:300]}
+    finally:
+        sftp.close()
+        transport.close()
+
+
 @router.get("/sftp/sample-files")
 def sftp_sample_files(_user=Depends(require_role("org_admin", "manager")), db: Session = Depends(get_db)):
     """Fetch a few sample filenames from the SFTP remote path for regex building."""
