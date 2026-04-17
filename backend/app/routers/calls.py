@@ -362,7 +362,7 @@ def export_calls_csv(
     headers = [
         "Call ID", "Date/Time", "Agent Name", "Agent ID", "Customer Phone",
         "Duration (s)", "Direction", "Call Type", "Subdirectory",
-        "QA Score", "Grade", "Status", "Compliance",
+        "QA Score", "Grade", "Status", "Eligible", "Ineligible Reason", "Compliance",
         "Critical Failure", "Critical Reason", "AI Summary",
     ]
     headers += [f"meta:{f}" for f in meta_fields]
@@ -375,6 +375,11 @@ def export_calls_csv(
 
     for c in calls:
         meta = c.call_metadata or {}
+        eligible = c.is_eligible if c.is_eligible is not None else True
+        score_val = round(c.qa_score, 1) if (eligible and c.qa_score is not None) else "N/A"
+        grade_val = c.ai_grade if eligible else "N/A"
+        compliance_val = ("Yes" if c.compliance_pass else "No") if eligible else "N/A"
+        critical_val = ("Yes" if c.has_critical_failure else "No") if eligible else "N/A"
         row = [
             c.call_id,
             c.date_time.isoformat() if c.date_time else "",
@@ -385,20 +390,22 @@ def export_calls_csv(
             c.direction or "",
             c.call_type or "",
             c.subdirectory or "",
-            round(c.qa_score, 1) if c.qa_score is not None else "",
-            c.ai_grade or "",
+            score_val,
+            grade_val or "",
             c.status,
-            "Yes" if c.compliance_pass else "No",
-            "Yes" if c.has_critical_failure else "No",
+            "Yes" if eligible else "No",
+            c.ineligible_reason or "",
+            compliance_val,
+            critical_val,
             c.critical_failure_reason or "",
             (c.ai_summary or "").replace("\n", " "),
         ]
         for f in meta_fields:
             row.append(meta.get(f, ""))
         if includeRules:
-            sc = scorecard_map.get(c.id, {})
+            sc = scorecard_map.get(c.id, {}) if eligible else {}
             for title in rule_titles_set:
-                row.append(sc.get(title, ""))
+                row.append(sc.get(title, "N/A" if not eligible else ""))
         writer.writerow(row)
 
     now_str = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
