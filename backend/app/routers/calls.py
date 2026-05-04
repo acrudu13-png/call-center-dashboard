@@ -227,27 +227,57 @@ def call_stats(current_user=Depends(get_current_user), db: Session = Depends(get
 
 @router.get("/agents")
 def list_agents(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """Get unique agent list with call counts."""
-    query = db.query(Call.agent_id, Call.agent_name, func.count(Call.id).label("callCount"))
+    """Get unique agent list with call counts.
+    Group by agent_id only — uses the most recent name spelling for display."""
+    # First find the most recent name per agent_id (handles capitalization variants)
+    name_subq = (
+        db.query(Call.agent_id, Call.agent_name)
+        .order_by(Call.agent_id, Call.date_time.desc())
+        .distinct(Call.agent_id)
+    )
     if current_user.role != "superadmin":
-        query = query.filter(Call.organization_id == current_user.organization_id)
+        name_subq = name_subq.filter(Call.organization_id == current_user.organization_id)
     if current_user.allowed_agents:
-        query = query.filter(Call.agent_id.in_(current_user.allowed_agents))
-    results = query.group_by(Call.agent_id, Call.agent_name).order_by(Call.agent_name).all()
-    return [
-        {"agentId": r.agent_id, "agentName": r.agent_name, "callCount": r.callCount}
-        for r in results
-    ]
+        name_subq = name_subq.filter(Call.agent_id.in_(current_user.allowed_agents))
+    name_map = {row.agent_id: row.agent_name for row in name_subq.all()}
+
+    # Then count calls grouped by agent_id only
+    count_query = db.query(Call.agent_id, func.count(Call.id).label("callCount"))
+    if current_user.role != "superadmin":
+        count_query = count_query.filter(Call.organization_id == current_user.organization_id)
+    if current_user.allowed_agents:
+        count_query = count_query.filter(Call.agent_id.in_(current_user.allowed_agents))
+    counts = count_query.group_by(Call.agent_id).all()
+
+    return sorted(
+        [
+            {"agentId": r.agent_id, "agentName": name_map.get(r.agent_id, r.agent_id), "callCount": r.callCount}
+            for r in counts
+        ],
+        key=lambda a: (a["agentName"] or "").lower(),
+    )
 
 
 @router.get("/agents/stats")
 def agent_stats(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    """Per-agent performance statistics for the Agents Hub."""
+    """Per-agent performance statistics for the Agents Hub.
+    Groups by agent_id only — uses most recent name spelling for display."""
     from sqlalchemy import case, and_
+
+    # Pick the most recent name per agent_id so capitalization variants don't split rows
+    name_subq = (
+        db.query(Call.agent_id, Call.agent_name)
+        .order_by(Call.agent_id, Call.date_time.desc())
+        .distinct(Call.agent_id)
+    )
+    if current_user.role != "superadmin":
+        name_subq = name_subq.filter(Call.organization_id == current_user.organization_id)
+    if current_user.allowed_agents:
+        name_subq = name_subq.filter(Call.agent_id.in_(current_user.allowed_agents))
+    name_map = {row.agent_id: row.agent_name for row in name_subq.all()}
 
     query = db.query(
             Call.agent_id,
-            Call.agent_name,
             func.count(Call.id).label("total_calls"),
             func.avg(Call.qa_score).label("avg_score"),
             func.min(Call.qa_score).label("min_score"),
@@ -266,8 +296,7 @@ def agent_stats(current_user=Depends(get_current_user), db: Session = Depends(ge
         query = query.filter(Call.agent_id.in_(current_user.allowed_agents))
     results = (
         query.filter(Call.status != "processing", Call.is_eligible == True)
-        .group_by(Call.agent_id, Call.agent_name)
-        .order_by(Call.agent_name)
+        .group_by(Call.agent_id)
         .all()
     )
 
@@ -276,7 +305,7 @@ def agent_stats(current_user=Depends(get_current_user), db: Session = Depends(ge
         total = r.total_calls or 1
         agents.append({
             "agentId": r.agent_id,
-            "agentName": r.agent_name,
+            "agentName": name_map.get(r.agent_id, r.agent_id),
             "totalCalls": r.total_calls,
             "avgScore": round(float(r.avg_score or 0), 1),
             "minScore": round(float(r.min_score or 0), 1),
