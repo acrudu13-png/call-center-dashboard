@@ -250,6 +250,11 @@ export default function CallsExplorerPage() {
         runId: runFilter !== "all" ? runFilter : undefined,
         direction: directionFilter !== "all" ? directionFilter : undefined,
         callType: callTypeFilter !== "all" ? callTypeFilter : undefined,
+        subdirectory: subdirFilter !== "all" ? subdirFilter : undefined,
+        metadataField: metaFilterField !== "all" ? metaFilterField : undefined,
+        metadataValue: metaFilterField !== "all" && metaFilterValue !== "all" ? metaFilterValue : undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
       });
       loadCalls(); // refresh to show "reanalyzing" status
     } catch (e) {
@@ -275,6 +280,11 @@ export default function CallsExplorerPage() {
         runId: runFilter !== "all" ? runFilter : undefined,
         direction: directionFilter !== "all" ? directionFilter : undefined,
         callType: callTypeFilter !== "all" ? callTypeFilter : undefined,
+        subdirectory: subdirFilter !== "all" ? subdirFilter : undefined,
+        metadataField: metaFilterField !== "all" ? metaFilterField : undefined,
+        metadataValue: metaFilterField !== "all" && metaFilterValue !== "all" ? metaFilterValue : undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
       });
       loadCalls();
     } catch (e) {
@@ -360,6 +370,7 @@ export default function CallsExplorerPage() {
                       <SelectItem value="flagged">{t.common.flagged}</SelectItem>
                       <SelectItem value="in_review">{t.common.inReview}</SelectItem>
                       <SelectItem value="processing">{t.common.processing}</SelectItem>
+                      <SelectItem value="failed">{t.common.failed}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

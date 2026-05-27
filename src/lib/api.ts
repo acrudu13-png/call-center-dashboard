@@ -386,6 +386,11 @@ export async function bulkReanalyze(params: {
   runId?: string;
   direction?: string;
   callType?: string;
+  subdirectory?: string;
+  metadataField?: string;
+  metadataValue?: string;
+  dateFrom?: string;
+  dateTo?: string;
 } = {}): Promise<{ message: string; total: number }> {
   const sp = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
@@ -407,6 +412,11 @@ export async function bulkReclassify(params: {
   runId?: string;
   direction?: string;
   callType?: string;
+  subdirectory?: string;
+  metadataField?: string;
+  metadataValue?: string;
+  dateFrom?: string;
+  dateTo?: string;
 } = {}): Promise<{ message: string; total: number }> {
   const sp = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {

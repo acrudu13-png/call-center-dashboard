@@ -213,6 +213,11 @@ async def bulk_reanalyze(
     runId: Optional[str] = None,
     direction: Optional[str] = None,
     callType: Optional[str] = None,
+    subdirectory: Optional[str] = None,
+    metadataField: Optional[str] = None,
+    metadataValue: Optional[str] = None,
+    dateFrom: Optional[str] = None,
+    dateTo: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -230,8 +235,28 @@ async def bulk_reanalyze(
         query = query.filter(Call.direction == direction)
     if callType:
         query = query.filter(Call.call_type == callType)
+    if subdirectory:
+        query = query.filter(Call.subdirectory == subdirectory)
     if runId:
         query = query.filter(Call.ingestion_run_id == runId)
+    if metadataField and metadataValue:
+        from sqlalchemy import text
+        query = query.filter(text("metadata->>:field = :value").bindparams(field=metadataField, value=metadataValue))
+    if dateFrom or dateTo:
+        from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+        try:
+            if dateFrom and dateTo:
+                _f = _dt.strptime(dateFrom, "%Y-%m-%d").replace(tzinfo=_tz.utc)
+                _t = _dt.strptime(dateTo, "%Y-%m-%d").replace(tzinfo=_tz.utc) + _td(days=1)
+                query = query.filter(Call.date_time >= _f, Call.date_time < _t)
+            elif dateFrom:
+                _f = _dt.strptime(dateFrom, "%Y-%m-%d").replace(tzinfo=_tz.utc)
+                query = query.filter(Call.date_time >= _f, Call.date_time < _f + _td(days=1))
+            elif dateTo:
+                _t = _dt.strptime(dateTo, "%Y-%m-%d").replace(tzinfo=_tz.utc)
+                query = query.filter(Call.date_time >= _t, Call.date_time < _t + _td(days=1))
+        except ValueError:
+            pass
     if search:
         pattern = f"%{search}%"
         query = query.filter(
@@ -302,6 +327,11 @@ async def bulk_reclassify(
     runId: Optional[str] = None,
     direction: Optional[str] = None,
     callType: Optional[str] = None,
+    subdirectory: Optional[str] = None,
+    metadataField: Optional[str] = None,
+    metadataValue: Optional[str] = None,
+    dateFrom: Optional[str] = None,
+    dateTo: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -318,8 +348,28 @@ async def bulk_reclassify(
         query = query.filter(Call.direction == direction)
     if callType:
         query = query.filter(Call.call_type == callType)
+    if subdirectory:
+        query = query.filter(Call.subdirectory == subdirectory)
     if runId:
         query = query.filter(Call.ingestion_run_id == runId)
+    if metadataField and metadataValue:
+        from sqlalchemy import text
+        query = query.filter(text("metadata->>:field = :value").bindparams(field=metadataField, value=metadataValue))
+    if dateFrom or dateTo:
+        from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+        try:
+            if dateFrom and dateTo:
+                _f = _dt.strptime(dateFrom, "%Y-%m-%d").replace(tzinfo=_tz.utc)
+                _t = _dt.strptime(dateTo, "%Y-%m-%d").replace(tzinfo=_tz.utc) + _td(days=1)
+                query = query.filter(Call.date_time >= _f, Call.date_time < _t)
+            elif dateFrom:
+                _f = _dt.strptime(dateFrom, "%Y-%m-%d").replace(tzinfo=_tz.utc)
+                query = query.filter(Call.date_time >= _f, Call.date_time < _f + _td(days=1))
+            elif dateTo:
+                _t = _dt.strptime(dateTo, "%Y-%m-%d").replace(tzinfo=_tz.utc)
+                query = query.filter(Call.date_time >= _t, Call.date_time < _t + _td(days=1))
+        except ValueError:
+            pass
     if search:
         pattern = f"%{search}%"
         query = query.filter(
